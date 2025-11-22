@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "dgSpecHash": "zh85KTi0iIPaQzdG+SJX60MCPqiMqnOxT+4XmyDs3jGAMtDdC/+s+GUSY7iggOMn3RVc7/sC1NsbDF6QWjQ6dQ==",
+  "success": true,
+  "projectFilePath": "/home/lukasz/[01] FERNFH MASTER/[01] SEMESTER 1/ESA1_final/PowerDemandForecasting/PowerDemandForecasting.csproj",
+  "expectedPackageFiles": [
+    "/home/lukasz/.nuget/packages/microsoft.bcl.asyncinterfaces/9.0.4/microsoft.bcl.asyncinterfaces.9.0.4.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/microsoft.ml/5.0.0/microsoft.ml.5.0.0.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/microsoft.ml.cpumath/5.0.0/microsoft.ml.cpumath.5.0.0.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/microsoft.ml.dataview/5.0.0/microsoft.ml.dataview.5.0.0.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/microsoft.ml.mkl.redist/5.0.0/microsoft.ml.mkl.redist.5.0.0.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/microsoft.ml.timeseries/5.0.0/microsoft.ml.timeseries.5.0.0.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/system.buffers/4.6.1/system.buffers.4.6.1.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/system.codedom/9.0.4/system.codedom.9.0.4.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/system.collections.immutable/9.0.4/system.collections.immutable.9.0.4.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/system.memory/4.6.3/system.memory.4.6.3.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/system.numerics.tensors/9.0.4/system.numerics.tensors.9.0.4.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/system.reflection.emit.lightweight/4.7.0/system.reflection.emit.lightweight.4.7.0.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/system.runtime.compilerservices.unsafe/6.1.2/system.runtime.compilerservices.unsafe.6.1.2.nupkg.sha512",
+    "/home/lukasz/.nuget/packages/system.threading.channels/9.0.4/system.threading.channels.9.0.4.nupkg.sha512"
+  ],
+  "logs": []
+}
