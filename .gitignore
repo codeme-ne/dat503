@@ -1,0 +1,27 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+
+# User-specific files
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio Code
+.vscode/
+.windsurf/
+.CLAUDE.md
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Generated Data Files (we only keep the raw input)
+PowerDemandForecasting/Data/el_power_clean.csv
+PowerDemandForecasting/Data/el_power_clean_dstfixed.csv
+PowerDemandForecasting/Data/train_data.csv
+PowerDemandForecasting/Data/test_data.csv
+PowerDemandForecasting/Data/evaluation_details.csv
+
+# Trained Models
+PowerDemandForecasting/Models/*.zip

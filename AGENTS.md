@@ -37,7 +37,7 @@ This repository contains a small .NET console project for power demand forecasti
 
 ---
 
-# Implementation & Results Documentation (Status: 2025-11-22)
+# Implementation & Results Documentation
 
 This section documents the technical approach, challenges encountered, and final results of the Power Demand Forecasting project.
 

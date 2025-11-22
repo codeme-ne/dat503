@@ -9,7 +9,7 @@ This is an **ML.NET 8** console application that forecasts **hourly electricity 
 - Hourly granularity instead of daily
 - Electricity consumption (MW) instead of bike rentals
 
-**Current Status:** Phases 0-3 complete (data cleaning, loading, train/test split). Phases 4-10 pending (SSA training, evaluation, forecasting).
+**Current Status:** Phases 0-5 complete (data cleaning, loading, train/test split, SSA training, evaluation). Phase 6+ pending (documentation finalization, future forecasting).
 
 **Reference files:**
 - `PLAN.md` - Comprehensive 10-phase implementation plan (German)
@@ -161,21 +161,19 @@ public class ModelOutput
 
 ## Execution Flow (Program.cs)
 
-**Current implementation (Phases 0-3 complete):**
+**Current implementation (Phases 0-5 complete):**
 1. **Setup:** Define paths, create `MLContext(seed: 0)`
 2. **Clean:** Run `CleanData(rawPath, cleanPath)` to generate cleaned CSV
 3. **Load:** Use `LoadData()` with TextLoader to read `el_power_clean.csv`
 4. **Validate:** Run `PerformQualityChecks()` - check for NaN/negatives, log date ranges
 5. **DST Fix:** Run `HandleDstDuplicatesAndGaps()` to merge October duplicates and interpolate March gaps
 6. **Split:** Run `CreateTrainTestFiles()` to create physical train/test CSV files
+7. **Train:** Run `TrainModel()` with dynamic trainSize calculation - `Program.cs:636-685`
+8. **Evaluate:** Run `EvaluateAndExport()` to calculate MAE/RMSE and export details - `Program.cs:687-751`
 
-**Pending implementation (Phases 4-10):**
-7. **Pipeline:** Configure `ForecastBySsa` with hourly parameters
-8. **Train:** `forecaster = forecastingPipeline.Fit(trainData)`
-9. **Evaluate:** Calculate MAE/RMSE on `testData`, display relative errors
-10. **Export:** Generate `evaluation_details.csv` for Excel visualization
-11. **Checkpoint:** Save model to `MLModel.zip` via `TimeSeriesPredictionEngine`
-12. **Forecast:** Optional future predictions beyond test set
+**Pending implementation (Phase 6+):**
+9. **Refinement:** Finalize documentation and comments (Phase 6)
+10. **Forecast:** Optional future predictions beyond test set (Phase 10)
 
 ## Evaluation Metrics
 
@@ -218,8 +216,8 @@ All parsing uses `CultureInfo.InvariantCulture`:
 - `Data/el_power_clean_dstfixed.csv` - DST-corrected data (no duplicates/gaps)
 - `Data/train_data.csv` - Training split (2023-09-30 to 2024-09-30)
 - `Data/test_data.csv` - Testing split (2024-09-30 to 2025-09-30)
-- `Data/evaluation_details.csv` - Per-timestamp predictions with confidence intervals (Excel-ready) - **PENDING**
-- `MLModel.zip` - Serialized forecasting model - **PENDING**
+- `Data/evaluation_details.csv` - Per-timestamp predictions with confidence intervals (Excel-ready)
+- `MLModel.zip` - Serialized forecasting model
 
 ## Troubleshooting
 
