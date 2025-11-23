@@ -71,6 +71,9 @@ namespace PowerDemandForecasting
             // Phase 5: Evaluate & Export
             EvaluateAndExport(mlContext, "Data/test_data.csv", modelPath, "Data/evaluation_details.csv");
             Console.WriteLine();
+
+            Console.WriteLine("Press any key to continue...");
+            Console.ReadKey();
         }
 
         /// <summary>
