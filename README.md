@@ -268,6 +268,16 @@ dotnet build
 dotnet run
 ```
 
+### Fehlerbehebung: Daten nicht gefunden
+
+Falls die historischen Daten beim Ausführen nicht gefunden werden:
+
+1. Navigieren Sie zum Projektordner
+2. Kopieren Sie den `Data`-Ordner
+3. Fügen Sie ihn in `bin/Debug/net8.0/` ein (bei Debug-Build)
+   - Oder in `bin/Release/net8.0/` (bei Release-Build)
+4. Starten Sie das Programm erneut
+
 ### Datenquelle herunterladen
 
 Die Anwendung benötigt historische Stromverbrauchsdaten von E-Control:
