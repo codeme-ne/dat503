@@ -789,7 +789,7 @@ namespace PowerDemandForecasting
                 });
 
                 // Update the engine state with the actual observed value
-                forecastEngine.CheckPoint(mlContext, modelPath);
+                // (CheckPoint removed - state updates happen automatically via Predict)
                 forecastEngine.Predict(originPoint);
             }
 
