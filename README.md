@@ -58,13 +58,13 @@ Der Prozess läuft vollautomatisch in `Program.cs` ab:
 
 ```mermaid
 graph TD;
-    Raw[Raw CSV (E-Control)] -->|CleanData| Clean[Clean CSV (Format Fix)];
-    Clean -->|HandleDst| DST[DST Fixed CSV (No Gaps/Dups)];
-    DST -->|Split| Train[Train Data (2023-24)];
-    DST -->|Split| Test[Test Data (2024-25)];
-    Train -->|TrainModel| Model[SSA Model (.zip)];
-    Test -->|Evaluate| Metrics[MAE / RMSE];
-    Model -->|Transform| Export[Evaluation Details (.csv)];
+    Raw["Raw CSV (E-Control)"] -->|CleanData| Clean["Clean CSV (Format Fix)"];
+    Clean -->|HandleDst| DST["DST Fixed CSV (No Gaps/Dups)"];
+    DST -->|Split| Train["Train Data (2023-24)"];
+    DST -->|Split| Test["Test Data (2024-25)"];
+    Train -->|TrainModel| Model["SSA Model (.zip)"];
+    Test -->|Evaluate| Metrics["MAE / RMSE"];
+    Model -->|Transform| Export["Evaluation Details (.csv)"];
 ```
 
 1.  **CleanData:** Parsing der Rohdaten, Entfernung von Metadaten, Normalisierung von Dezimaltrennzeichen (Komma → Punkt).
