@@ -817,6 +817,58 @@ namespace PowerDemandForecasting
             Console.WriteLine($"{"Overall",-10} {overallMAE,-15:F3} {overallRMSE,-15:F3} {overallMAPE,-15:F2}");
             Console.WriteLine();
 
+            // Calculate Confidence Interval Coverage
+            Console.WriteLine("\n=== Confidence Interval Coverage Analysis ===");
+            int inBoundsCount = 0;
+            int totalCount = 0;
+            var coverageByHorizon = new double[HORIZON];
+            var countsPerHorizon = new int[HORIZON];
+
+            foreach (var result in rollingResults)
+            {
+                for (int h = 0; h < HORIZON; h++)
+                {
+                    if (h < result.ActualValues.Length)
+                    {
+                        float actual = result.ActualValues[h];
+                        float lower = result.LowerBounds[h];
+                        float upper = result.UpperBounds[h];
+                        
+                        if (!float.IsNaN(actual) && !float.IsNaN(lower) && !float.IsNaN(upper))
+                        {
+                            totalCount++;
+                            countsPerHorizon[h]++;
+                            
+                            if (actual >= lower && actual <= upper)
+                            {
+                                inBoundsCount++;
+                                coverageByHorizon[h]++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            double overallCoverage = (double)inBoundsCount / totalCount * 100.0;
+            Console.WriteLine($"Overall 95% CI Coverage: {overallCoverage:F2}% (Expected: ~95%)");
+
+            if (Math.Abs(overallCoverage - 95.0) > 5.0)
+            {
+                Console.WriteLine("WARNING: Coverage deviates significantly from expected 95%!");
+            }
+
+            // Per-horizon coverage
+            Console.WriteLine("\nCoverage by Horizon:");
+            for (int h = 0; h < HORIZON; h += 6) // Show every 6 hours
+            {
+                if (countsPerHorizon[h] > 0)
+                {
+                    double coverage = (coverageByHorizon[h] / countsPerHorizon[h]) * 100.0;
+                    Console.WriteLine($"  H{h+1:D2}: {coverage:F2}%");
+                }
+            }
+            Console.WriteLine();
+
             // STEP 6: Export Extended CSV
             ExportDetailedResults(rollingResults, horizonMetrics, exportPath);
             Console.WriteLine($"Detailed evaluation results exported to: {exportPath}");
