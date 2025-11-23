@@ -646,14 +646,14 @@ namespace PowerDemandForecasting
             Console.WriteLine($"Train data written to: {trainPath}");
             Console.WriteLine($"  Range: {trainStart:yyyy-MM-dd HH:mm} to < {testStart:yyyy-MM-dd HH:mm}");
             Console.WriteLine($"  Count: {trainData.Count} records");
-            
+
             // Validation warning for Train size
             if (trainData.Count < 8760) Console.WriteLine("  WARNING: Train data seems too small (< 8760)!");
 
             Console.WriteLine($"Test data written to: {testPath}");
             Console.WriteLine($"  Range: {testStart:yyyy-MM-dd HH:mm} to < {testEnd:yyyy-MM-dd HH:mm}");
             Console.WriteLine($"  Count: {testData.Count} records");
-            
+
             // Validation warning for Test size
             if (testData.Count == 0) Console.WriteLine("  WARNING: Test data is empty!");
         }
@@ -745,7 +745,7 @@ namespace PowerDemandForecasting
             // STEP 4: Rolling-Origin Evaluation Loop
             const int HORIZON = 24;
             var rollingResults = new System.Collections.Generic.List<RollingOriginResult>();
-            
+
             // We need at least HORIZON+1 points for proper evaluation
             int maxOrigins = testRows.Count - HORIZON;
             Console.WriteLine($"Performing rolling-origin evaluation with {maxOrigins} origins...\n");
@@ -753,7 +753,7 @@ namespace PowerDemandForecasting
             for (int originIdx = 0; originIdx < maxOrigins; originIdx++)
             {
                 var originPoint = testRows[originIdx];
-                
+
                 // Display progress every 100 origins
                 if (originIdx % 100 == 0)
                 {
@@ -766,7 +766,7 @@ namespace PowerDemandForecasting
                 // Collect actual values for the next 24 hours
                 var actualValues = new float[HORIZON];
                 var forecastTimestamps = new DateTime[HORIZON];
-                
+
                 for (int h = 0; h < HORIZON; h++)
                 {
                     int targetIdx = originIdx + 1 + h; // +1 because we forecast from after the origin
@@ -928,7 +928,7 @@ namespace PowerDemandForecasting
                 writer.WriteLine();
                 writer.WriteLine("=== Per-Horizon Summary Statistics ===");
                 writer.WriteLine("Horizon;MAE_MW;RMSE_MW;MAPE_Percent;SampleCount");
-                
+
                 foreach (var hm in metrics)
                 {
                     writer.WriteLine($"{hm.Horizon};{hm.MAE:F3};{hm.RMSE:F3};{hm.MAPE:F2};{hm.SampleCount}");
