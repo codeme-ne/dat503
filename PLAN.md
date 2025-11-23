@@ -1,741 +1,365 @@
-## PROMPT FÜR CODEX HIGH THINKING
+# 📋 Entwicklungsplan - Strombedarfsprognose Österreich
 
-(Stromverbrauchs‑Forecast Österreich mit ML.NET / SSA)
-
----
-
-## Fortschritt (Stand: 2025-11-22)
-
-- **Phase 0 – Projektgrundlage**: **ERLEDIGT**
-  - .NET 8 Konsolenprojekt `PowerDemandForecasting` erstellt, Build erfolgreich.
-  - Ordnerstruktur angelegt: `Data/`, `Models/`.
-  - NuGet-Pakete installiert: `Microsoft.ML` 5.0.0, `Microsoft.ML.TimeSeries` 5.0.0.
-  - Rohdatei `Data/el_dataset_h.csv` ins Projekt eingebunden.
-
-- **Phase 1 – Datenbereinigung**: **ERLEDIGT**
-  - `CleanData()` implementiert (synchron, robuste Fehlerbehandlung + Logging).
-  - Metadaten: 14 Kopfzeilen korrekt erkannt und übersprungen.
-  - Verarbeitete Datenzeilen: **85.463 gültige Records**.
-  - Zeitabdeckung der bereinigten Daten: **2016–2025 (stündlich)**.
-  - Ausgabe: `Data/el_power_clean.csv` mit exakt 2 Spalten:
-    - `Timestamp` (Format `yyyy-MM-dd HH:mm:ss`, `InvariantCulture`)
-    - `Stromverbrauch` (Float mit Dezimalpunkt, `InvariantCulture`)
-
-- **Phase 2 – Data Models & Loading**: **ERLEDIGT**
-  - DTOs (`ModelInput`, `ModelOutput`) erstellt.
-  - `LoadData` & `PerformQualityChecks` implementiert (DST-Korrektur, Lückenfüllung).
-  - Validierte Daten: `Data/el_power_clean_dstfixed.csv`.
-
-- **Phase 3 – Train/Test Split**: **ERLEDIGT**
-  - Temporaler Split implementiert (Concept Drift Prevention).
-  - Physische Dateien erstellt:
-    - `Data/train_data.csv` (30.09.2023 - 29.09.2024, 8784 Records).
-    - `Data/test_data.csv` (30.09.2024 - 29.09.2025, 8760 Records).
-
-- **Phase 4–10 (ML-Pipeline, Evaluation, Forecasting, Doku)**: **AUSSTEHEND**
-  - Nächste Schritte: SSA-Pipeline konfigurieren, Training, Evaluation (MAE/RMSE), CSV-Export, Zukunfts-Forecast.
-
-- **Phase 5 – Evaluation & Export**: **ERLEDIGT**
-  - Modelltraining und Evaluation erfolgreich durchgeführt.
-  - Metriken: MAE = 261.16 MW (3.92%), RMSE = 339.40 MW (5.09%).
-  - Ergebnisse exportiert nach `Data/evaluation_details.csv`.
-  - Modell gespeichert unter `Models/forecast_model.zip`.
-
-- **Phase 6 – Integration & Documentation**: **IN ARBEIT**
-  - Nächste Schritte: Code-Kommentare verfeinern, Projektdokumentation in AGENTS.md finalisieren.
+Dieser Entwicklungsplan dokumentiert den chronologischen Entwicklungsprozess der .NET 8 Konsolenanwendung zur stündlichen Vorhersage des österreichischen Stromverbrauchs mittels Singular Spectrum Analysis (SSA) und ML.NET.
 
 ---
 
-## Ausführungsplan (Generiert von Zen MCP Planner)
+## 🎯 Projektziele und Motivation
 
-**Übersicht:** 14 Tasks in 6 Batches, sequentielle Abhängigkeiten, Checkpoints nach jedem Batch.
+### Hauptziel
+Entwicklung einer robusten Zeitreihenprognose für den stündlichen Stromverbrauch in Österreich mit einem Vorhersagehorizont von 24 Stunden.
 
-```text
-EXECUTION FLOW (Sequential Dependencies)
+### Technische Anforderungen
+- **.NET 8** als Zielframework für moderne C#-Features
+- **ML.NET** (v5.0.0) für maschinelles Lernen
+- **Univariate Zeitreihenanalyse** ohne externe Features (z.B. Wetter)
+- **Deterministisches, reproduzierbares** Training
+- **Plattformunabhängige** Ausführung
 
-┌──────────────────────────────────────────────────────────┐
-│ BATCH 1: Foundation & Setup                             │
-│  1.1 → 1.2 → 1.3                                        │
-│  (Project + Folders + CleanData)                        │ ✓ ERLEDIGT
-└────────────────┬─────────────────────────────────────────┘
-                 │
-                 ▼
-┌──────────────────────────────────────────────────────────┐
-│ BATCH 2: Data Models & Loading                          │
-│  2.1 → 2.2 → 2.3                                        │
-│  (DTOs + TextLoader + Quality Checks)                   │ ✓ ERLEDIGT
-└────────────────┬─────────────────────────────────────────┘
-                 │
-                 ▼
-┌──────────────────────────────────────────────────────────┐
-│ BATCH 3: Train/Test Split                               │
-│  3.1                                                     │
-│  (Temporal Split: 2023-2024 train, 2024+ test)         │ ✓ ERLEDIGT
-└────────────────┬─────────────────────────────────────────┘
-                 │
-                 ▼
-┌──────────────────────────────────────────────────────────┐
-│ BATCH 4: SSA Pipeline & Training                        │
-│  4.1 → 4.2                                              │
-│  (Configure Parameters + Train Model)                   │ ✅ ERLEDIGT
-└────────────────┬─────────────────────────────────────────┘
-                 │
-                 ▼
-┌──────────────────────────────────────────────────────────┐
-│ BATCH 5: Evaluation & Export                            │
-│  5.1 → 5.2 → 5.3                                        │
-│  (Metrics + CSV Export + Save Model)                    │ ✓ ERLEDIGT
-└────────────────┬─────────────────────────────────────────┘
-                 │
-                 ▼
-┌──────────────────────────────────────────────────────────┐
-│ BATCH 6: Integration & Documentation                    │
-│  6.1 → 6.2                                              │
-│  (Assemble Program.cs + Add Comments)                   │ ⏳ IN ARBEIT
-└──────────────────────────────────────────────────────────┘
-```
-
-### BATCH 1: Foundation & Setup ✓ ERLEDIGT
-
-**Task 1.1:** .NET 8 Console Project
-
-- Command: `dotnet new console -n PowerDemandForecasting`
-- Verify: `dotnet build` succeeds ✓
-
-**Task 1.2:** Setup Structure & Dependencies
-
-- Folders: `Data/`, `Models/` ✓
-- NuGet: `Microsoft.ML`, `Microsoft.ML.TimeSeries` ✓
-- Verify: Packages in .csproj ✓
-
-**Task 1.3:** CleanData() Method
-
-- Parse `el_da**Status:** ✅ Abgeschlossen
-- Implementiert in `HandleDstDuplicatesAndGaps`
-- Validierung: 10 März-Lücken interpoliert, 9 Oktober-Duplikate gemittelt.
-- Final Integrity Check: 0 Gaps, 0 Duplicates. Datei: `el_power_clean_dstfixed.csv`.
-
-**Wichtige Implementierungsdetails (Essentiell für Dokumentation):**
-1. **Dezimaltrennzeichen:** Die Ausgabe in die CSV-Datei erfolgt strikt mit **Punkt (.)** als Dezimaltrennzeichen (`CultureInfo.InvariantCulture`). Dies verhindert Parsing-Fehler in nachfolgenden ML-Schritten, unabhängig von der lokalen Systemeinstellung (z.B. de-DE Komma).
-2. **Datenfluss (Non-Destructive):** Die Korrektur überschreibt nicht die Eingabedatei.
-   - Input: `el_power_clean.csv` (Bereinigt, aber mit Zeit-Lücken/Duplikaten)
-   - Output: `el_power_clean_dstfixed.csv` (Lückenlos, eindeutig, validiert)
-   Dies sichert die Nachvollziehbarkeit jeder Transformationsstufe.
+### Datenquelle
+Stündliche Stromverbrauchsdaten von [E-Control Austria](https://www.e-control.at/statistik/e-statistik/data) im CSV-Format, Zeitraum 2016-2025.
 
 ---
 
-### BATCH 2: Data Models & Loading ✓ ERLEDIGT
-
-**Task 2.1:** Define DTOs
-
-- `ModelInput { DateTime Timestamp, float Stromverbrauch }`
-- `ModelOutput { float[] ForecastedValues, LowerBoundValues, UpperBoundValues }`
-- Verify: Classes compile
-
-**Task 2.2:** Configure TextLoader
-
-- Separator: `;`, Decimal: `.`
-- Load `el_power_clean.csv` → IDataView
-- Verify: No load errors
-
-**Task 2.3:** Data Quality Checks
-
-- Convert to `List<ModelInput>`, sort by Timestamp
-- Log: count, min/max dates
-- Check: NaN, negative values
-- Verify: Quality report prints
-
-**Success Criteria:**
-
-- Data loads without exceptions
-- Date range: 2016-2025
-- No NaN/negative values
-
----
-
-### BATCH 3: Train/Test Split ✅ ABGESCHLOSSEN
-
-**Task 3.1:** Temporal Split (Concept Drift Prevention)
-
-- Train: `2023-09-30 00:00` bis `< 2024-09-30 00:00`
-- Test: `>= 2024-09-30 00:00` bis `< 2025-09-30 00:00`
-- Create: `Data/train_data.csv` & `Data/test_data.csv` (Physische Dateien für bessere Transparenz)
-- Verify: Split sizes reasonable
-
-**Success Criteria:**
-
-- trainList: 8784 records (Schaltjahr 2024) ✅
-- testList: 8760 records (1 Jahr) ✅
-- No overlap ✅
-- Dateien erfolgreich erstellt ✅
-
----
-
-### BATCH 4: SSA Pipeline & Training ✅ ERLEDIGT
-
-**Task 4.1:** Configure SSA Parameters
-
-- `windowSize = 168` (1 week = 7 × 24h)
-- `seriesLength = 720` (1 month ≈ 30 × 24h)
-- `trainSize` = Dynamisch berechnet (8784 für Schaltjahr, 8760 für Normaljahr)
-- `horizon = 24` (24 hours ahead)
-- `confidence = 0.95`
-- Verify: `windowSize < seriesLength <= trainSize <= trainList.Count` ✅
-
-**Task 4.2:** Train SSA Model
-
-- Build: `ForecastBySsa` pipeline
-- Fit: on `trainData`
-- Verify: Training completes
-- Model saved to: `Models/forecast_model.zip`
-- **Implementierungs-Detail:** `trainSize` wird zur Laufzeit basierend auf `trainData.Count()` gesetzt.
-
-**Success Criteria:**
-
-- No parameter constraint violations ✅
-- Training completes in < 5 minutes ✅
-
----
-
-### BATCH 5: Evaluation & Export ✅ ERLEDIGT
-   
-**Task 5.1:** Evaluate Model
-
-- Transform `testData`
-- Extract: actual vs forecasted values
-- Calculate: MAE, RMSE, relative errors
-- Verify: Metrics print to console
-
-**Task 5.2:** Export Evaluation Details
-
-- CSV columns: `Timestamp;Actual_Consumption;Forecast_Value;Lower_Bound;Upper_Bound`
-- Save to: `Data/evaluation_details.csv`
-- Verify: Excel-readable
-
-**Task 5.3:** Save Model & Future Forecast
-
-- Create: `TimeSeriesPredictionEngine` (Partially done: Model saved)
-- Checkpoint: `Models/forecast_model.zip`
-- Implement: `ForecastFuture()` console output (Next Step)
-- Verify: Model saved
-
-**Success Criteria:**
-
-- MAE/RMSE < 20% relative error (baseline) ✅ (Actual: ~3.9%)
-- `evaluation_details.csv` opens in Excel ✅
-- `forecast_model.zip` created ✅
-
-**Results:**
-- MAE: 261.16 MW
-- RMSE: 339.40 MW
-
----
-
-### BATCH 6: Integration & Documentation ⏳ IN ARBEIT
-
-**Task 6.1:** Assemble Complete Program.cs
-
-- Integrate all methods in order
-- Add error prevention checks (Phase 9)
-- Verify: Full end-to-end run succeeds
-
-**Task 6.2:** Add Documentation
-
-- Comment SSA parameter reasoning
-- Reference bike tutorial
-- Verify: Code readable
-
-**Success Criteria:**
-
-- Full end-to-end run completes
-- Output matches PLAN.md examples
-
----
-
-### KRITISCHE FEHLER-VERMEIDUNG (Checklist)
-
-Vor jedem Batch validieren:
-
-- ✓ Spalte 9 (`Stromverbrauch`) verwenden, NICHT Spalte 1 (leer)
-- ✓ `,` → `.` in CleanData() konvertieren
-- ✓ Keine zufälligen Splits (nur chronologisch)
-- ✓ Leere Stromverbrauch-Zeilen überspringen
-- `DecimalMarker = '.'` in TextLoader setzen
-- SSA-Constraints vor `Fit()` validieren
-- `CultureInfo.InvariantCulture` für alle Parsings verwenden
-
----
-
-**Rolle:**
-Du bist ein Senior‑C#‑Entwickler und ML.NET‑Experte. Du arbeitest in einem High‑Thinking‑Run mit Auto‑Approve und sollst in einem Rutsch eine saubere, nachvollziehbare Lösung bauen.
-
-**Ziel:**
-Baue eine .NET‑8‑Konsolenanwendung, die den **stündlichen Stromverbrauch** in Österreich (MW, Spalte „Stromverbrauch") als **univariate Zeitreihe** mit **SSA (Singular Spectrum Analysis)** in ML.NET prognostiziert.
-Die Architektur soll sich am offiziellen Bike‑Sharing‑Tutorial („Forecast bike rental demand“) orientieren, aber auf:
-
-* CSV statt SQL,
-* stündliche Werte statt tägliche,
-* Stromverbrauch statt Fahrradmieten
-
-angepasst werden.
-
-Die Dateien, die du als Kontext annehmen kannst:
-
-* `Data/el_dataset_h.csv` – Rohdaten (stündlicher Stromverbrauch Österreich, inclusive Metadaten).
-* `Tutorial_Vorhersage_des_Bedarfs_für_Fahrradvermietungen_–_Zeitreihe_-_ML.NET.pdf` – offizielles ML.NET‑Tutorial.
-* `Forecasting_BikeSharingDemand`‑Sample (README + Program.cs).
-* `SSA_encyclopedia.pdf` – kurzer Überblick zu SSA (Trend/Saison/Rauschen, Trajektorienmatrix).
-
-Arbeite strikt schrittweise gemäß folgendem Plan.
-
----
-
-## Phase 0 – Projektgrundlage
-
-1. **Neues Projekt anlegen**
-
-   * .NET 8 Konsolenanwendung (verwendet: SDK 8.0.121), z. B. `PowerDemandForecasting`.
-   * Ordnerstruktur:
-
-     * `Data/` – für CSV‑Dateien.
-     * `Models/` – optional für DTO‑Klassen.
-
-2. **NuGet‑Pakete installieren**
-
-   * `Microsoft.ML`
-   * `Microsoft.ML.TimeSeries` ([Microsoft Learn][1])
-
-3. **Pfade und MLContext**
-
-   * In `Program.cs`:
-
-     * `rootDir`, `dataDir`, Pfad zur Rohdatei `el_dataset_h.csv`.
-     * Später: Pfad zur bereinigten Datei `el_power_clean.csv` und Modellpfad `MLModel.zip`.
-   * `var mlContext = new MLContext(seed: 0);`
-
----
-
-## Phase 1 – Rohdaten aus `el_dataset_h.csv` programmatisch bereinigen
-
-### 1.1 Struktur der Rohdatei verstehen
-
-Inhalt (vereinfacht):
-
-* Erste ~14 Zeilen: Metadaten, inkl. Kopfzeilen wie
-  `"Header & Timestamp";"1";"2";...`
-  `"KOMP";"Inlandstromverbrauch";"Exporte";...;"Stromverbrauch";...`
-* Ab Zeile 15: stündliche Daten:
-
-  ```text
-  "2016-01-01 00:00:00";;"1830,877";"955,164";...;"6104,931";...
-  ```
-
-Eigenschaften:
-
-* Trennzeichen: `;`
-* Dezimaltrennzeichen: `,`
-* Spalten:
-
-  * Spalte 0: Timestamp (inkl. Anführungszeichen).
-  * Spalte 1: „Inlandstromverbrauch“ – in den Datenzeilen **leer** (`""` → `;;`).
-  * Spalte 9: „Stromverbrauch“ – Zielvariable (z. B. `6104,931`).
-
-
-     ```text
-     Timestamp;Stromverbrauch
-     ```
-
-   * Danach für jede gültige Zeile:
-
-     ```text
-     2016-01-01 00:00:00;6104.931
-     2016-01-01 01:00:00;...
-     ```
-
-Damit vermeidest du Komma‑Probleme und verschlankst die Datei auf genau 2 Spalten.
-
-Rufe `CleanData(...)` gleich zu Beginn von `Main` auf; bei existierender Ziel‑Datei kannst du optional einen einfachen Check einbauen (z. B. nur neu erzeugen, wenn sie fehlt).
-
----
-
-## Phase 2 – ML.NET‑Datenmodell & Laden der bereinigten CSV
-
-### 2.1 ModelInput / ModelOutput
-
-**ModelInput** (für die bereinigte Datei):
-
-```csharp
-public class ModelInput
-{
-    [LoadColumn(0)]
-    public DateTime Timestamp { get; set; }
-
-    [LoadColumn(1)]
-    public float Stromverbrauch { get; set; }
-}
-```
-
-**ModelOutput** (analog Bike‑Sample, aber generischer Name):
-
-```csharp
-public class ModelOutput
-{
-    public float[] ForecastedValues { get; set; }
-    public float[] LowerBoundValues { get; set; }
-    public float[] UpperBoundValues { get; set; }
-}
-```
-
-### 2.2 TextLoader konfigurieren
-
-Nutze `TextLoader` für `el_power_clean.csv`:
-
-```csharp
-var textLoaderOptions = new TextLoader.Options
-{
-    Separators = new[] { ';' },
-    HasHeader = true,
-    AllowQuoting = false,
-    DecimalMarker = '.' // CleanData hat Komma bereits ersetzt
-};
-
-var loader   = mlContext.Data.CreateTextLoader<ModelInput>(textLoaderOptions);
-var allData  = loader.Load(cleanPath);
+## 🏗️ Projektarchitektur
+
+Die Anwendung wurde als sequentielle Pipeline mit 5 Hauptphasen konzipiert, die nacheinander in `Program.cs` ausgeführt werden. [0-cite-0](#0-cite-0) 
+
+```mermaid
+graph TD
+    A["Phase 1: Data Cleaning"] --> B["Phase 2: Quality Checks & DST Fixing"]
+    B --> C["Phase 3: Train/Test Split"]
+    C --> D["Phase 4: Model Training"]
+    D --> E["Phase 5: Evaluation & Export"]
 ```
 
 ---
 
-## Phase 3 – Datenqualität prüfen & in Speicher holen
+## 📦 Phase 0 - Projektgrundlage und Abhängigkeiten
 
-1. Erzeuge eine Liste:
+### Projektstruktur
+Das Projekt wurde als .NET 8 Konsolenanwendung mit folgender Ordnerstruktur angelegt:
+- `Data/` - Eingabe- und Ausgabedateien (CSV)
+- `Models/` - C# Datenmodelle und trainiertes ML-Modell
 
-   ```csharp
-   var allRows = mlContext.Data
-       .CreateEnumerable<ModelInput>(allData, reuseRowObject: false)
-       .OrderBy(r => r.Timestamp)
-       .ToList();
-   ```
+### NuGet-Abhängigkeiten
+Zwei zentrale Pakete wurden verwendet:
+- **Microsoft.ML** (5.0.0) - Kern ML.NET Framework
+- **Microsoft.ML.TimeSeries** (5.0.0) - Zeitreihenalgorithmen inkl. SSA
 
-2. Basiskontrollen:
+### Datenmodelle
+Zwei einfache DTOs wurden für die ML.NET Pipeline definiert:
 
-   * `allRows.Count` loggen.
-   * Min/Max Timestamp loggen.
-   * Prüfen, ob `Stromverbrauch` irgendwo NaN ist oder negative Werte enthält.
-   * Optional: prüfen, ob Zeitstempel stündlich lückenlos sind (Differenz zwischen aufeinanderfolgenden Timestamps = 1 Stunde). Bei Lücken könntest du später eine Forward‑Fill‑ or Interpolationslogik ergänzen; für erste Version kannst du annehmen, dass die E‑Control‑Daten sauber sind. ([Microsoft Learn][2])
+**ModelInput**: Repräsentiert eine Zeile der bereinigten CSV-Daten mit Zeitstempel und Stromverbrauch (MW). [0-cite-1](#0-cite-1) 
 
----
-
-## Phase 4 – Zeitlicher Split (Train vs. Test, Concept Drift beachten)
-
-### 4.1 Split‑Strategie
-
-Um **Concept Drift** (veraltete Muster, z. B. vor E‑Autos, Wärmepumpen) zu vermeiden, trainiere nur auf dem **letzten Jahr** vor dem Testzeitraum und ignoriere ältere Daten:
-
-* **Trainingszeitraum:** `30.09.2023 00:00` bis `< 30.09.2024 00:00`.
-* **Testzeitraum:** `>= 30.09.2024 00:00` bis Ende der Daten (ca. `30.09.2025 23:00`).
-
-Daten **vor** `30.09.2023` werden **nicht** fürs Training verwendet, um Concept Drift zu minimieren.
-
-### 4.2 Implementierung
-
-```csharp
-var trainStart = new DateTime(2023, 9, 30, 0, 0, 0);
-var testStart  = new DateTime(2024, 9, 30, 0, 0, 0);
-
-// Auf Trainings- und Testbereich beschränken
-var trainList = allRows
-    .Where(r => r.Timestamp >= trainStart && r.Timestamp < testStart)
-    .ToList();
-
-var testList = allRows
-    .Where(r => r.Timestamp >= testStart)
-    .ToList();
-
-// IDataViews erstellen
-IDataView trainData = mlContext.Data.LoadFromEnumerable(trainList);
-IDataView testData  = mlContext.Data.LoadFromEnumerable(testList);
-```
-
-Keine zufälligen Splits, kein Shuffling – Zeitreihen immer chronologisch behandeln. ([Microsoft Learn][3])
+**ModelOutput**: Repräsentiert die SSA-Prognoseergebnisse als Arrays mit Prognosewerten und 95%-Konfidenzintervallen. [0-cite-2](#0-cite-2) 
 
 ---
 
-## Phase 5 – SSA‑Forecasting‑Pipeline (ForecastBySsa)
+## 🧹 Phase 1 - Data Cleaning (Datenbereinigung)
 
-### 5.1 Parameterwahl (auf Stunden gemappt)
+### Problem
+Die Rohdatei `el_dataset_h.csv` von E-Control enthält:
+- **14 Metadaten-Zeilen** am Anfang (Header, Einheiten, Beschreibungen)
+- **Komma als Dezimaltrennzeichen** (z.B. `6104,931`)
+- **Mehrere Spalten** - nur Spalte 9 ("Stromverbrauch") ist relevant
+- **Anführungszeichen** um Werte
+- **Leere Werte** in manchen Zeilen
 
-Laut ML.NET‑Doku: ([Microsoft Learn][1])
+### Lösung
+Die Methode `CleanData()` wurde implementiert, um eine konsistente 2-Spalten-CSV zu erzeugen. [0-cite-3](#0-cite-3) 
 
-* `windowSize` – Fensterlänge L (wie viele vergangene Punkte werden für ein Muster genutzt).
-* `seriesLength` – Länge N der Serie im internen Puffer.
-* `trainSize` – Anzahl Punkte vom Serienanfang im Trainingsset, die tatsächlich fürs Training verwendet werden.
-* `horizon` – Anzahl zu prognostizierender Schritte.
+### Implementierungsdetails
 
-Dein Setup (stündliche Daten):
+**Metadaten-Überspringen**: Die Methode erkennt den Beginn der eigentlichen Daten durch einen Zeitstempel-Prefix (`"2016-"`). [0-cite-4](#0-cite-4) 
 
-* Auflösung: 1 Stunde.
-* Dominante Rhythmen: Tages‑/Wochen‑Muster, lokaler Monatskontext, Jahreszyklus.
+**Dezimaltrennzeichen-Konvertierung**: Komma wird durch Punkt ersetzt, um `InvariantCulture`-Parsing zu ermöglichen. [0-cite-5](#0-cite-5) 
 
-**Startkonfiguration:**
+**Validierung**: Sowohl Zeitstempel als auch Stromverbrauchswerte werden validiert, ungültige Zeilen werden übersprungen. [0-cite-6](#0-cite-6) 
 
-```csharp
-int windowSize           = 7 * 24;   // 168 Stunden = 1 Woche
-int seriesLength         = 30 * 24;  // 720 Stunden ≈ 1 Monat
-int nominalTrainSize     = 365 * 24; // 8760 Stunden = 1 Jahr
-int trainSize            = Math.Min(nominalTrainSize, trainList.Count);
-int forecastHorizonHours = 24;       // 24h-Horizont für Punkt-Prognosen
-float confidenceLevel    = 0.95f;
-```
+**InvariantCulture**: Alle DateTime- und Float-Operationen verwenden `CultureInfo.InvariantCulture`, um plattformunabhängige Ausführung zu garantieren (z.B. auf deutschen Systemen mit Komma-Dezimaltrenner). [0-cite-7](#0-cite-7) 
 
-Hinweise aus Microsoft‑Q&A & Doku:
+### Output
+- Datei: `Data/el_power_clean.csv`
+- Format: `Timestamp;Stromverbrauch` (2 Spalten, Semikolon-getrennt)
+- Verarbeitete Zeilen: ~85.463 gültige Records (2016-2025)
 
-* `seriesLength` soll > `windowSize` und meist ca. 1.5–3× so groß sein; du liegst mit 720 vs. 168 etwas darüber, kannst das aber später feinjustieren. ([Microsoft Learn][4])
-* `trainSize` darf nicht größer als `trainList.Count` sein und muss ≥ `seriesLength` sein.
+### Warum diese Herangehensweise?
+- **Transparenz**: Jede Transformationsstufe erzeugt eine eigene Datei (non-destructive)
+- **Debugging**: Zwischenschritte sind inspizierbar
+- **Konsistenz**: Punkt als Dezimaltrenner vermeidet Parsing-Fehler in ML.NET
 
-### 5.2 Pipeline definieren
+---
 
-```csharp
-var forecastingPipeline = mlContext.Forecasting.ForecastBySsa(
-    outputColumnName: nameof(ModelOutput.ForecastedValues),
-    inputColumnName:  nameof(ModelInput.Stromverbrauch),
-    windowSize:       windowSize,
-    seriesLength:     seriesLength,
-    trainSize:        trainSize,
-    horizon:          forecastHorizonHours,
-    isAdaptive:       false,
-    discountFactor:   1.0f,
-    rankSelectionMethod: RankSelectionMethod.Exact,
-    confidenceLowerBoundColumn: nameof(ModelOutput.LowerBoundValues),
-    confidenceUpperBoundColumn: nameof(ModelOutput.UpperBoundValues),
-    confidenceLevel:  confidenceLevel
-);
-```
+## ✅ Phase 2 - Quality Checks & DST Fixing (Qualitätsprüfung & Zeitumstellungskorrektur)
 
-* Advanced Parameter (`isAdaptive`, `discountFactor`, `rank`, `maxGrowth`, `shouldStabilize` etc.) zunächst bei **Default** lassen; SSA ist robust genug für eine erste Version. ([Microsoft Learn][1])
+Diese Phase ist in zwei Teile gegliedert: Qualitätsprüfung und DST-Korrektur.
 
-### 5.3 Modell trainieren
+### Teil A: Qualitätsprüfung (`PerformQualityChecks`)
 
-```csharp
-var forecaster = forecastingPipeline.Fit(trainData);
+Die Methode führt umfassende Integritätsprüfungen durch. [0-cite-8](#0-cite-8) 
+
+**Zeitstempel-Integrität**:
+- Monotonie-Prüfung (aufsteigende Zeitreihenfolge)
+- Duplikat-Erkennung
+- Lücken-Detektion zwischen aufeinanderfolgenden Zeitstempeln [0-cite-9](#0-cite-9) 
+
+**Wert-Integrität**:
+- NaN/Infinity-Erkennung
+- Negative Werte (physikalisch unmöglich)
+- Zero-Werte (ungewöhnlich, aber möglich) [0-cite-10](#0-cite-10) 
+
+**Statistische Analyse**:
+- Min/Max/Mean/StdDev zur Erkennung von Ausreißern [0-cite-11](#0-cite-11) 
+
+**Concept Drift Awareness**:
+Die Methode analysiert auch die zeitliche Verteilung der Daten für spätere Train/Test-Splits. [0-cite-12](#0-cite-12) 
+
+### Teil B: DST-Korrektur (`HandleDstDuplicatesAndGaps`)
+
+### Problem: Zeitumstellung (Daylight Saving Time)
+Die Umstellung zwischen Sommer- und Winterzeit verursacht zwei Arten von Anomalien in Zeitreihen:
+
+1. **Oktober (Uhren zurück)**: Die Stunde 02:00-03:00 existiert zweimal
+   - Erste 02:00 vor Umstellung (MESZ)
+   - Zweite 02:00 nach Umstellung (MEZ)
+   - **Resultat**: Doppelte Zeitstempel in den Daten
+
+2. **März (Uhren vor)**: Die Stunde 02:00-03:00 wird übersprungen
+   - **Resultat**: Lücke in der Zeitreihe
+
+### Warum ist das kritisch für ML?
+ML.NET's SSA-Algorithmus erwartet eine **lückenlose, monotone Zeitreihe** ohne Duplikate. Verletzungen dieser Annahme führen zu Fehlern oder verfälschten Prognosen.
+
+### Lösung: Zweistufige Korrektur
+
+**Schritt 1: Oktober-Duplikate behandeln**
+Duplikate werden gruppiert und durch ihren **Mittelwert** ersetzt, um die Monotonie zu wahren. [0-cite-13](#0-cite-13) 
+
+**Rationale**: Die Mittelwertbildung ist physikalisch sinnvoll, da der tatsächliche Verbrauch während der doppelten Stunde irgendwo zwischen den beiden gemessenen Werten liegt.
+
+**Schritt 2: März-Lücken füllen**
+Fehlende Stunden werden durch **lineare Interpolation** der Nachbarwerte gefüllt. [0-cite-14](#0-cite-14) 
+
+Die Interpolationslogik berechnet den Durchschnitt der Stunden vor und nach der Lücke. [0-cite-15](#0-cite-15) 
+
+**Rationale**: Lineare Interpolation ist eine konservative Methode, die keine komplexen Annahmen über das Lastprofil macht und typischerweise nur eine einzige Stunde pro Jahr betrifft.
+
+**Schritt 3: Finale Validierung**
+Nach der Korrektur wird die Zeitreihe erneut auf Lücken und Duplikate geprüft. [0-cite-16](#0-cite-16) 
+
+### Output
+- Datei: `Data/el_power_clean_dstfixed.csv`
+- Garantien: Keine Lücken, keine Duplikate, strikt monoton
+- Typische Korrekturen: ~10 März-Lücken, ~9 Oktober-Duplikate (pro Jahr)
+
+---
+
+## ✂️ Phase 3 - Train/Test Split (Temporale Aufteilung)
+
+### Problem: Concept Drift in Energiedaten
+Stromverbrauchsmuster ändern sich im Laufe der Zeit durch:
+- **Technologische Trends**: E-Mobilität, Wärmepumpen, Smart Homes
+- **Politische Ereignisse**: COVID-19 Lockdowns
+- **Wirtschaftliche Faktoren**: Industrieverlagerungen
+
+Ältere Daten (z.B. 2016-2022) repräsentieren möglicherweise **veraltete Muster**, die für Prognosen in 2024/2025 nicht mehr relevant sind.
+
+### Lösung: Strikte temporale Splits
+Die Methode `CreateTrainTestFiles()` implementiert eine strikte temporale Aufteilung. [0-cite-17](#0-cite-17) 
+
+**Trainingsperiode**: 30.09.2023 00:00 bis 29.09.2024 23:00 (genau 1 Jahr)
+**Testperiode**: 30.09.2024 00:00 bis 29.09.2025 23:00 (genau 1 Jahr)
+
+Die Zeitgrenzen werden strikt definiert und gefiltert. [0-cite-18](#0-cite-18) 
+
+### Warum nur das letzte Jahr für Training?
+- **Recency Bias**: Neuere Daten sind relevanter für zukünftige Prognosen
+- **Concept Drift Mitigation**: Vermeidung veralteter Muster
+- **Schaltjahr-Handling**: 2024 ist ein Schaltjahr (8784 Stunden statt 8760)
+
+### Warum keine zufälligen Splits?
+Bei Zeitreihen würde ein zufälliger Split **Data Leakage** verursachen: Das Modell könnte zukünftige Werte "sehen", bevor es sie prognostiziert. Temporale Splits respektieren die kausale Ordnung.
+
+### Output
+- `Data/train_data.csv` (8784 Records für Schaltjahr 2023-2024)
+- `Data/test_data.csv` (8760 Records für 2024-2025)
+- Physische Dateien ermöglichen externe Validierung
+
+---
+
+## 🧠 Phase 4 - Model Training (SSA-Modelltraining)
+
+### Algorithmenwahl: Warum SSA?
+
+**Singular Spectrum Analysis (SSA)** wurde gegenüber anderen Algorithmen (LSTM, Prophet, ARIMA) gewählt aus folgenden Gründen:
+
+1. **Univariate Fokussierung**: SSA benötigt keine externen Features (Wetter, Feiertage)
+2. **Determinismus**: Gleiche Eingabe → gleiche Ausgabe (kein Dropout, kein stochastisches Training)
+3. **Schnelles Training**: Minuten statt Stunden/Tage
+4. **Transparente Dekomposition**: Zerlegt Zeitreihen in Trend + Saisonalität + Rauschen
+5. **ML.NET Native Support**: Direkt in `Microsoft.ML.TimeSeries` integriert
+
+### SSA-Parameterkonfiguration
+
+Die Methode `TrainModel()` konfiguriert die SSA-Pipeline mit folgenden Parametern. [0-cite-19](#0-cite-19) 
+
+**Window Size (168 Stunden = 7 Tage)**:
+- Erfasst den **wöchentlichen Zyklus** (Montag-Sonntag)
+- Unterschiedliche Lastprofile an Werktagen vs. Wochenende [0-cite-20](#0-cite-20) 
+
+**Series Length (720 Stunden = 30 Tage)**:
+- Erfasst den **monatlichen Kontext**
+- Sollte größer als `windowSize` sein (Faustregel: 2-5x) [0-cite-21](#0-cite-21) 
+
+**Train Size (dynamisch berechnet)**:
+- Verwendet **alle verfügbaren Trainingsdaten** (~8784 für Schaltjahr)
+- Muss ≥ `seriesLength` sein
+- Wird zur Laufzeit aus der tatsächlichen Datenmenge berechnet [0-cite-22](#0-cite-22) 
+
+**Forecast Horizon (24 Stunden)**:
+- Prognosezeitraum: nächste 24 Stunden
+- Balance zwischen Nützlichkeit und Genauigkeit [0-cite-23](#0-cite-23) 
+
+**Confidence Level (95%)**:
+- Berechnet untere und obere Prognose-Schranken
+- Ermöglicht Unsicherheitsquantifizierung [0-cite-24](#0-cite-24) 
+
+### Warum dynamische Train Size?
+2024 ist ein Schaltjahr (366 Tage = 8784 Stunden). Eine hart-codierte Train Size von 8760 würde 24 Stunden "verschenken". Die dynamische Berechnung maximiert die genutzten Daten. [0-cite-22](#0-cite-22) 
+
+### Training und Speicherung
+Das Modell wird mit `Fit()` trainiert und als `.zip`-Datei gespeichert. [0-cite-25](#0-cite-25) 
+
+### Output
+- `Models/forecast_model.zip` (trainiertes ML.NET Modell)
+- Trainingsdauer: Typischerweise < 5 Minuten
+
+---
+
+## 📊 Phase 5 - Evaluation & Export (Bewertung und Ergebnisexport)
+
+### Evaluationsmetriken
+
+Die Methode `EvaluateAndExport()` berechnet zwei Standard-Zeitreihenmetriken. [0-cite-26](#0-cite-26) 
+
+**Mean Absolute Error (MAE)**:
+- Durchschnittliche absolute Abweichung zwischen Prognose und Ist-Wert
+- Einfach interpretierbar in MW
+- Weniger sensitiv gegenüber Ausreißern als RMSE [0-cite-27](#0-cite-27) 
+
+**Root Mean Squared Error (RMSE)**:
+- Wurzel der mittleren quadrierten Abweichung
+- Bestraft große Fehler stärker (quadratisch)
+- Standard-Metrik in ML.NET Tutorials [0-cite-28](#0-cite-28) 
+
+**Relative Fehler**:
+Beide Metriken werden auch als Prozentsatz des mittleren Stromverbrauchs angegeben, um die Größenordnung einzuordnen. [0-cite-29](#0-cite-29) 
+
+### Ergebnisse
+Die aktuelle Implementierung erreicht:
+- **MAE**: 261.16 MW (~3.92% relativer Fehler)
+- **RMSE**: 339.40 MW (~5.09% relativer Fehler)
+- **Mean Load**: 6662.50 MW
+
+Diese Werte sind für eine **univariate Prognose ohne Wetterdaten** als sehr gut einzustufen.
+
+### CSV-Export für Analysen
+
+Die Methode exportiert eine detaillierte CSV mit 5 Spalten für jeden Zeitstempel:
+- `Timestamp`: Zeitpunkt der Prognose
+- `Actual_Consumption`: Tatsächlicher gemessener Verbrauch
+- `Forecast_Value`: Prognostizierter Wert
+- `Lower_Bound`: Untere 95%-Konfidenzgrenze
+- `Upper_Bound`: Obere 95%-Konfidenzgrenze [0-cite-30](#0-cite-30) 
+
+**Negative Lower Bounds**: Die untere Konfidenzgrenze wird auf 0 begrenzt, da negativer Stromverbrauch physikalisch unmöglich ist. [0-cite-31](#0-cite-31) 
+
+### Output
+- `Data/evaluation_details.csv` (Excel-kompatibel)
+- Verwendbar für Visualisierungen in Excel, PowerBI, Tableau, etc.
+
+---
+
+## 🔑 Wichtige technische Entscheidungen (Zusammenfassung)
+
+### 1. Dezimaltrennzeichen-Konsistenz
+**Problem**: CSV-Dateien von E-Control verwenden Komma, ML.NET erwartet Punkt.
+**Lösung**: Strikte Verwendung von `CultureInfo.InvariantCulture` in allen Parsing- und Formatierungsoperationen.
+**Vorteil**: Plattformunabhängige Ausführung (funktioniert auf de-DE, en-US, etc.)
+
+### 2. Non-Destructive Pipeline
+**Entscheidung**: Jede Phase erzeugt eine neue Ausgabedatei, statt vorhandene zu überschreiben.
+**Dateien**: `el_power_clean.csv` → `el_power_clean_dstfixed.csv` → `train_data.csv` / `test_data.csv`
+**Vorteil**: Nachvollziehbarkeit, Debugging, Rollback-Möglichkeit
+
+### 3. DST-Korrektur statt Ignorierung
+**Problem**: Zeitumstellungen verursachen Duplikate/Lücken.
+**Alternative Ansätze**: Zeilen löschen, UTC verwenden, DST ignorieren
+**Gewählte Lösung**: Intelligente Korrektur (Mittelwert/Interpolation)
+**Begründung**: Minimaler Datenverlust, physikalisch sinnvoll, ML-kompatibel
+
+### 4. Concept Drift Prevention
+**Problem**: Ältere Daten repräsentieren veraltete Verbrauchsmuster.
+**Lösung**: Training nur auf dem letzten Jahr (2023-2024), ältere Daten verworfen.
+**Trade-off**: Weniger Trainingsdaten vs. relevantere Muster
+
+### 5. SSA statt Deep Learning
+**Problem**: Univariate Prognose ohne externe Features.
+**Alternative**: LSTM, Transformer, Prophet
+**Gewählte Lösung**: SSA (ML.NET native)
+**Begründung**: Deterministisch, schnell, keine GPU erforderlich, transparente Dekomposition
+
+---
+
+## 🚀 Ausführung und Reproduzierbarkeit
+
+### Deterministisches Training
+Durch die Verwendung von `new MLContext(seed: 0)` ist das Training **vollständig deterministisch**. Mehrfache Ausführungen mit identischen Eingabedaten erzeugen identische Modelle. [0-cite-32](#0-cite-32) 
+
+### Vollständige Pipeline
+Die Main-Methode orchestriert alle Phasen sequentiell ohne manuelle Intervention. [0-cite-0](#0-cite-0) 
+
+### Build & Run
+```bash
+dotnet build PowerDemandForecasting/PowerDemandForecasting.csproj
+dotnet run --project PowerDemandForecasting/PowerDemandForecasting.csproj
 ```
 
 ---
 
-## Phase 6 – Evaluation über den gesamten Testzeitraum + CSV‑Export
+## 📚 Referenzen und Ressourcen
 
-Du nutzt das Bike‑Tutorial als Vorlage: Transformiere `testData` mit dem Modell, vergleiche Ist‑Werte mit den `ForecastedValues[0]` und berechne MAE & RMSE.
+### ML.NET Dokumentation
+- [Time Series Forecasting Tutorial (Bike Sharing)](https://learn.microsoft.com/en-us/dotnet/machine-learning/tutorials/time-series-demand-forecasting)
+- [ForecastBySsa API Reference](https://learn.microsoft.com/en-us/dotnet/api/microsoft.ml.timeseriescatalog.forecastbyssa)
 
-### 6.1 Evaluation (MAE, RMSE, relative Fehler)
+### Wissenschaftliche Grundlagen
+- [Singular Spectrum Analysis - Wikipedia](https://en.wikipedia.org/wiki/Singular_spectrum_analysis)
+- SSA dekomponiert Zeitreihen in Trend-, Saison- und Rauschkomponenten mittels Eigenwertzerlegung
 
-Implementiere:
-
-```csharp
-static void Evaluate(IDataView testData, ITransformer model, MLContext mlContext)
-{
-    IDataView predictions = model.Transform(testData);
-
-    var actual = mlContext.Data
-        .CreateEnumerable<ModelInput>(testData, reuseRowObject: false)
-        .Select(r => r.Stromverbrauch)
-        .ToArray();
-
-    var forecasted = mlContext.Data
-        .CreateEnumerable<ModelOutput>(predictions, reuseRowObject: false)
-        .Select(p => p.ForecastedValues[0])
-        .ToArray();
-
-    var errors = actual.Zip(forecasted, (a, f) => a - f).ToArray();
-
-    double mae  = errors.Average(e => Math.Abs(e));
-    double rmse = Math.Sqrt(errors.Average(e => e * e));
-    double meanLoad = actual.Average();
-
-    Console.WriteLine("Evaluation Metrics");
-    Console.WriteLine("---------------------");
-    Console.WriteLine($"Mean Load (Test):      {meanLoad:F2} MW");
-    Console.WriteLine($"Mean Absolute Error:   {mae:F2} MW ({mae / meanLoad:P1})");
-    Console.WriteLine($"Root Mean Squared Err: {rmse:F2} MW ({rmse / meanLoad:P1})");
-    Console.WriteLine();
-}
-```
-
-Rufe `Evaluate(testData, forecaster, mlContext);` nach dem Training auf.
-
-### 6.2 Detaillierter CSV‑Export für Excel (`evaluation_details.csv`)
-
-Zusätzlich sollst du eine Datei `Data/evaluation_details.csv` erzeugen, um die Kurven in Excel plotten zu können.
-
-Implementiere z. B.:
-
-```csharp
-static void ExportEvaluationDetails(
-    IDataView testData,
-    ITransformer model,
-    MLContext mlContext,
-    string exportPath)
-{
-    var predictions = model.Transform(testData);
-
-    var actualRows = mlContext.Data
-        .CreateEnumerable<ModelInput>(testData, reuseRowObject: false)
-        .ToArray();
-
-    var predRows = mlContext.Data
-        .CreateEnumerable<ModelOutput>(predictions, reuseRowObject: false)
-        .ToArray();
-
-    using var writer = new StreamWriter(exportPath, false, Encoding.UTF8);
-    writer.WriteLine("Timestamp;Actual_Consumption;Forecast_Value;Lower_Bound;Upper_Bound");
-
-    int n = Math.Min(actualRows.Length, predRows.Length);
-
-    for (int i = 0; i < n; i++)
-    {
-        var ts      = actualRows[i].Timestamp;
-        float act   = actualRows[i].Stromverbrauch;
-        float pred  = predRows[i].ForecastedValues[0];
-        float lower = predRows[i].LowerBoundValues[0];
-        float upper = predRows[i].UpperBoundValues[0];
-
-        if (lower < 0) lower = 0; // negative Last verhindern
-
-        writer.WriteLine(
-            $"{ts:yyyy-MM-dd HH:mm};{act:F3};{pred:F3};{lower:F3};{upper:F3}");
-    }
-}
-```
-
-Ruf diese Methode nach `Evaluate(...)` auf, z. B.:
-
-```csharp
-ExportEvaluationDetails(testData, forecaster, mlContext,
-    Path.Combine(rootDir, "Data", "evaluation_details.csv"));
-```
-
-Damit kannst du in Excel „Ist“ vs. „Forecast“ bequem visualisieren.
+### Datenquelle
+- [E-Control Austria - Statistik Portal](https://www.e-control.at/statistik/e-statistik/data)
 
 ---
 
-## Phase 7 – Zeitreihen‑Forecast für einen Zukunftshorizont
+## 📝 Notes
 
-Optional, aber hilfreich: Erzeuge zusätzlich einen **reinen Zukunfts‑Forecast** mit einem `TimeSeriesPredictionEngine`, analog zum Bike‑Beispiel.
+### Erweiterungsmöglichkeiten
+1. **Multivariate Features**: Integration von Wetterdaten (Temperatur), Feiertagen, Wochentagen
+2. **Ensemble-Modelle**: Kombination von SSA mit ARIMA oder Prophet
+3. **Online Learning**: Adaptive Modelle, die sich kontinuierlich aktualisieren
+4. **Regionale Auflösung**: Prognosen für einzelne Bundesländer statt Gesamtösterreich
 
-### 7.1 PredictionEngine & Modell speichern
+### Bekannte Limitationen
+1. **Horizon Trade-off**: Je größer der Prognosehorizont (>24h), desto geringer die Genauigkeit
+2. **Extreme Events**: Unvorhersehbare Ereignisse (Kraftwerksausfälle) werden nicht erfasst
+3. **Saisonale Drift**: Langfristige klimatische Veränderungen (milde Winter) nicht berücksichtigt
 
-```csharp
-var forecastEngine = forecaster.CreateTimeSeriesEngine<ModelInput, ModelOutput>(mlContext);
-
-string modelPath = Path.Combine(rootDir, "MLModel.zip");
-forecastEngine.CheckPoint(mlContext, modelPath);
-```
-
-### 7.2 Forecast‑Funktion (nur Konsolenausgabe für z. B. nächste 168 Stunden)
-
-```csharp
-static void ForecastFuture(
-    int horizon,
-    TimeSeriesPredictionEngine<ModelInput, ModelOutput> forecastEngine)
-{
-    var forecast = forecastEngine.Predict();
-
-    Console.WriteLine("Future Forecast");
-    Console.WriteLine("TimestampIndex;Lower;Forecast;Upper");
-
-    for (int i = 0; i < horizon; i++)
-    {
-        float lower = Math.Max(0, forecast.LowerBoundValues[i]);
-        float pred  = forecast.ForecastedValues[i];
-        float upper = forecast.UpperBoundValues[i];
-
-        Console.WriteLine($"{i};{lower:F3};{pred:F3};{upper:F3}");
-    }
-}
-```
-
-Aufruf am Ende:
-
-```csharp
-ForecastFuture(forecastHorizonHours, forecastEngine);
-```
+### Wartung
+- **Jährliches Retraining**: Empfohlen, um Concept Drift zu kompensieren
+- **Datenaktualisierung**: E-Control Daten regelmäßig synchronisieren
+- **Parameter-Tuning**: `windowSize` und `seriesLength` können experimentell optimiert werden
 
 ---
 
-## Phase 8 – Programmlogik zusammenführen
-
-Bringe alles in `Program.cs` in eine klare Reihenfolge (Top‑Level Statements oder `Main`):
-
-1. `using`‑Direktiven:
-
-   * `System`, `System.IO`, `System.Linq`, `System.Globalization`, `System.Text`
-   * `Microsoft.ML`, `Microsoft.ML.Data`, `Microsoft.ML.Transforms.TimeSeries`
-2. Pfad‑Definitionen (`rootDir`, `dataDir`, `rawPath`, `cleanPath`, `modelPath`).
-3. `var mlContext = new MLContext(seed: 0);`
-4. Aufruf `CleanData(rawPath, cleanPath);`
-5. Definition `ModelInput`, `ModelOutput`.
-6. Konfiguration `TextLoader` und Laden von `el_power_clean.csv`.
-7. Umwandlung in `allRows` + Quality Checks.
-8. ZEIT‑Split in `trainData` und `testData` (Concept Drift beachten).
-9. Konfiguration der SSA‑Pipeline (`ForecastBySsa` mit Stunden‑Parametern).
-10. Training: `var forecaster = forecastingPipeline.Fit(trainData);`
-11. Evaluation: `Evaluate(testData, forecaster, mlContext);`
-12. Export: `ExportEvaluationDetails(testData, forecaster, mlContext, ...)`.
-13. PredictionEngine & Modell‑Checkpoint.
-14. Optionaler Zukunfts‑Forecast (`ForecastFuture`).
-
----
-
-## Phase 9 – Typische Fehlerquellen explizit vermeiden
-
-Stelle im Code sicher, dass Folgendes **nicht** passiert:
-
-1. **Falsche Spalte gewählt**
-
-   * Bei der Bereinigung wird Spalte 9 („Stromverbrauch“) aus der Rohdatei gezogen.
-   * In `ModelInput` der bereinigten Datei gibt es **nur** `Timestamp` und `Stromverbrauch`.
-
-2. **Dezimaltrennzeichen ignoriert**
-
-   * In `CleanData` Komma → Punkt ersetzen.
-   * In `TextLoader` `DecimalMarker = '.'` setzen.
-
-3. **Zeitreihen‑Shuffle**
-
-   * Keine zufälligen Splits; immer mit `Timestamp` filtern.
-
-4. **Ungültige SSA‑Parameter**
-
-   * Sicherstellen:
-
-     * `windowSize < seriesLength <= trainSize`.
-     * `trainSize <= trainList.Count`.
-   * Sonst ggf. `trainSize = trainList.Count` und/oder `seriesLength` entsprechend verkleinern. ([Microsoft Learn][1])
-
-5. **Zu großer Horizont**
-
-   * Starte mit `horizon = 24` oder `168`. Je größer der Horizont, desto schlechter typischerweise die Genauigkeit bei univariater SSA. ([Microsoft Learn][4])
-
-6. **Fehlende oder NaN‑Werte unbehandelt**
-
-   * Falls im Clean‑Prozess Zeilen mit leerem Stromverbrauch nicht verworfen werden, nutze `ReplaceMissingValues` oder eine explizite Imputation, bevor du in die Pipeline gehst. ([Microsoft Learn][5])
-
----
-
-## Phase 10 – Minimaldokumentation im Code
-
-Füge kurze Kommentare ein, u. a.:
-
-* Verweis auf das Bike‑Sharing‑Tutorial (als Pipeline‑Vorlage).
-* Ein Satz zu SSA (Zerlegung in Trend/Saisonalität/Rauschen, Trajektorienmatrix).
-* Begründung der Parameter:
-
-  * `windowSize = 168` → Wochenmuster (Mo–So).
-  * `seriesLength ≈ 30 Tage` → lokaler Monatskontext.
-  * `trainSize ≈ 1 Jahr` → kompletter Jahreszyklus.
-
----
-
-[1]: https://learn.microsoft.com/en-us/dotnet/api/microsoft.ml.timeseriescatalog.forecastbyssa?view=ml-dotnet-preview&utm_source=chatgpt.com "TimeSeriesCatalog.ForecastBySsa Method (Microsoft.ML)"
-[2]: https://learn.microsoft.com/en-us/dotnet/machine-learning/resources/transforms?utm_source=chatgpt.com "Data transformations - ML.NET"
-[3]: https://learn.microsoft.com/en-us/dotnet/machine-learning/tutorials/time-series-demand-forecasting?utm_source=chatgpt.com "Tutorial: Forecast bike rental demand - time series - ML.NET"
-[4]: https://learn.microsoft.com/en-us/answers/questions/2181403/ml-net-time-series-algorithms-to-predict-future-fo?utm_source=chatgpt.com "ML.NET Time Series algorithms to predict future forecasts"
-[5]: https://learn.microsoft.com/en-us/dotnet/machine-learning/how-to-guides/prepare-data-ml-net?utm_source=chatgpt.com "Prepare data for building a model - ML.NET"
