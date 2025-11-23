@@ -1,0 +1,36 @@
+name: .NET Build and Validate
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+        
+    - name: Restore dependencies
+      run: dotnet restore PowerDemandForecasting/PowerDemandForecasting.csproj
+      
+    - name: Build
+      run: dotnet build PowerDemandForecasting/PowerDemandForecasting.csproj --no-restore --configuration Release
+      
+    - name: Check for compilation warnings
+      run: dotnet build PowerDemandForecasting/PowerDemandForecasting.csproj --no-restore --configuration Release /warnaserror
+      
+    - name: Run format check
+      run: dotnet format PowerDemandForecasting/PowerDemandForecasting.csproj --verify-no-changes --verbosity diagnostic
+      
+    # Note: Actual test run would require test data
+    # - name: Test
+    #   run: dotnet test --no-build --verbosity normal
