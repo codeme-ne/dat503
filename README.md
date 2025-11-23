@@ -268,6 +268,19 @@ dotnet build
 dotnet run
 ```
 
+### Datenquelle herunterladen
+
+Die Anwendung benötigt historische Stromverbrauchsdaten von E-Control:
+
+1. Besuche [E-Control Statistik](https://www.e-control.at/statistik/e-statistik/data)
+2. Navigiere zu: **Marktstatistik → Lastprofile**
+3. Wähle: **Österreich Gesamt → Stündlich → 2016-2025**
+4. Download als CSV
+5. Speichere die Datei als: `PowerDemandForecasting/Data/el_dataset_h.csv`
+6. Die Datei sollte ~85,000 Zeilen haben (Format: `Timestamp;Stromverbrauch;...`)
+
+**Alternativ:** Falls der direkte Download nicht verfügbar ist, kontaktiere E-Control für historische Datensätze.
+
 ### Erwartete Output-Dateien
 
 Nach erfolgreicher Ausführung werden folgende Dateien im `Data/`-Ordner generiert:
