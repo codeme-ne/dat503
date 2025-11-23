@@ -9,6 +9,31 @@ using PowerDemandForecasting.Models;
 
 namespace PowerDemandForecasting
 {
+    /// <summary>
+    /// Stores detailed evaluation results for each forecast origin point
+    /// </summary>
+    public class RollingOriginResult
+    {
+        public DateTime OriginTimestamp { get; set; }
+        public DateTime[] ForecastTimestamps { get; set; } = Array.Empty<DateTime>();
+        public float[] ActualValues { get; set; } = Array.Empty<float>();
+        public float[] ForecastedValues { get; set; } = Array.Empty<float>();
+        public float[] LowerBounds { get; set; } = Array.Empty<float>();
+        public float[] UpperBounds { get; set; } = Array.Empty<float>();
+    }
+
+    /// <summary>
+    /// Stores aggregated metrics for each forecast horizon (1h to 24h)
+    /// </summary>
+    public class HorizonMetrics
+    {
+        public int Horizon { get; set; }
+        public double MAE { get; set; }
+        public double RMSE { get; set; }
+        public double MAPE { get; set; }
+        public int SampleCount { get; set; }
+    }
+
     class Program
     {
         static void Main(string[] args)
@@ -686,7 +711,7 @@ namespace PowerDemandForecasting
 
         static void EvaluateAndExport(MLContext mlContext, string testDataPath, string modelPath, string exportPath)
         {
-            Console.WriteLine("Phase 5: Evaluating Model & Exporting Details...");
+            Console.WriteLine("Phase 5: Rolling-Origin Multi-Step Evaluation...");
 
             if (!File.Exists(testDataPath)) throw new FileNotFoundException("Test data not found", testDataPath);
             if (!File.Exists(modelPath)) throw new FileNotFoundException("Model file not found", modelPath);
@@ -699,6 +724,13 @@ namespace PowerDemandForecasting
                 allowQuoting: false
             );
 
+            var testRows = mlContext.Data
+                .CreateEnumerable<ModelInput>(testDataView, reuseRowObject: false)
+                .OrderBy(r => r.Timestamp)
+                .ToList();
+
+            Console.WriteLine($"Test data loaded: {testRows.Count} records");
+
             // Load Model
             ITransformer model;
             using (var stream = new FileStream(modelPath, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -706,48 +738,202 @@ namespace PowerDemandForecasting
                 model = mlContext.Model.Load(stream, out var _);
             }
 
-            // Make Predictions
-            var predictions = model.Transform(testDataView);
+            // STEP 3: Initialize TimeSeriesPredictionEngine
+            var forecastEngine = model.CreateTimeSeriesEngine<ModelInput, ModelOutput>(mlContext);
+            Console.WriteLine("TimeSeriesPredictionEngine initialized.");
 
-            // Convert to enumerable for analysis
-            var actualRows = mlContext.Data.CreateEnumerable<ModelInput>(testDataView, reuseRowObject: false).ToList();
-            var forecastRows = mlContext.Data.CreateEnumerable<ModelOutput>(predictions, reuseRowObject: false).ToList();
+            // STEP 4: Rolling-Origin Evaluation Loop
+            const int HORIZON = 24;
+            var rollingResults = new System.Collections.Generic.List<RollingOriginResult>();
+            
+            // We need at least HORIZON+1 points for proper evaluation
+            int maxOrigins = testRows.Count - HORIZON;
+            Console.WriteLine($"Performing rolling-origin evaluation with {maxOrigins} origins...\n");
 
-            // Calculate Metrics (MAE, RMSE)
-            // Note: SSA prediction creates a vector, we take the first element [0] for the immediate step
-            var errors = actualRows.Zip(forecastRows, (actual, forecast) => actual.Stromverbrauch - forecast.ForecastedValues[0]).ToList();
-
-            double mae = errors.Average(e => Math.Abs(e));
-            double rmse = Math.Sqrt(errors.Average(e => e * e));
-            double meanLoad = actualRows.Average(r => r.Stromverbrauch);
-
-            Console.WriteLine("Evaluation Metrics:");
-            Console.WriteLine("-------------------");
-            Console.WriteLine($"Mean Load (Test Period): {meanLoad:F2} MW");
-            Console.WriteLine($"Mean Absolute Error:     {mae:F2} MW ({(mae / meanLoad):P2})");
-            Console.WriteLine($"Root Mean Squared Error: {rmse:F2} MW ({(rmse / meanLoad):P2})");
-
-            // Export to CSV
-            using (var writer = new StreamWriter(exportPath, false))
+            for (int originIdx = 0; originIdx < maxOrigins; originIdx++)
             {
-                writer.WriteLine("Timestamp;Actual_Consumption;Forecast_Value;Lower_Bound;Upper_Bound");
-
-                int count = Math.Min(actualRows.Count, forecastRows.Count);
-                for (int i = 0; i < count; i++)
+                var originPoint = testRows[originIdx];
+                
+                // Display progress every 100 origins
+                if (originIdx % 100 == 0)
                 {
-                    var ts = actualRows[i].Timestamp;
-                    var act = actualRows[i].Stromverbrauch;
-                    var fc = forecastRows[i].ForecastedValues[0];
-                    var lb = forecastRows[i].LowerBoundValues[0];
-                    var ub = forecastRows[i].UpperBoundValues[0];
+                    Console.WriteLine($"Progress: Origin {originIdx + 1}/{maxOrigins} - {originPoint.Timestamp:yyyy-MM-dd HH:mm}");
+                }
 
-                    // Clamp negative lower bound to 0 (physical impossibility for power demand)
-                    if (lb < 0) lb = 0;
+                // Make 24-hour forecast from this origin
+                var forecast = forecastEngine.Predict();
 
-                    writer.WriteLine($"{ts:yyyy-MM-dd HH:mm:ss};{act:F3};{fc:F3};{lb:F3};{ub:F3}");
+                // Collect actual values for the next 24 hours
+                var actualValues = new float[HORIZON];
+                var forecastTimestamps = new DateTime[HORIZON];
+                
+                for (int h = 0; h < HORIZON; h++)
+                {
+                    int targetIdx = originIdx + 1 + h; // +1 because we forecast from after the origin
+                    if (targetIdx < testRows.Count)
+                    {
+                        actualValues[h] = testRows[targetIdx].Stromverbrauch;
+                        forecastTimestamps[h] = testRows[targetIdx].Timestamp;
+                    }
+                }
+
+                // Store results
+                rollingResults.Add(new RollingOriginResult
+                {
+                    OriginTimestamp = originPoint.Timestamp,
+                    ForecastTimestamps = forecastTimestamps,
+                    ActualValues = actualValues,
+                    ForecastedValues = forecast.ForecastedValues,
+                    LowerBounds = forecast.LowerBoundValues,
+                    UpperBounds = forecast.UpperBoundValues
+                });
+
+                // Update the engine state with the actual observed value
+                forecastEngine.CheckPoint(mlContext, modelPath);
+                forecastEngine.Predict(originPoint);
+            }
+
+            Console.WriteLine($"\nRolling-origin evaluation complete: {rollingResults.Count} forecasts generated.\n");
+
+            // STEP 5: Calculate Per-Horizon Metrics
+            var horizonMetrics = CalculateHorizonMetrics(rollingResults, HORIZON);
+
+            // Display metrics
+            Console.WriteLine("=== Per-Horizon Evaluation Metrics ===");
+            Console.WriteLine($"{"Horizon",-10} {"MAE (MW)",-15} {"RMSE (MW)",-15} {"MAPE (%)",-15} {"Samples",-10}");
+            Console.WriteLine(new string('-', 75));
+
+            foreach (var hm in horizonMetrics)
+            {
+                Console.WriteLine($"{hm.Horizon + "h",-10} {hm.MAE,-15:F3} {hm.RMSE,-15:F3} {hm.MAPE,-15:F2} {hm.SampleCount,-10}");
+            }
+
+            // Overall metrics
+            double overallMAE = horizonMetrics.Average(h => h.MAE);
+            double overallRMSE = horizonMetrics.Average(h => h.RMSE);
+            double overallMAPE = horizonMetrics.Average(h => h.MAPE);
+
+            Console.WriteLine(new string('-', 75));
+            Console.WriteLine($"{"Overall",-10} {overallMAE,-15:F3} {overallRMSE,-15:F3} {overallMAPE,-15:F2}");
+            Console.WriteLine();
+
+            // STEP 6: Export Extended CSV
+            ExportDetailedResults(rollingResults, horizonMetrics, exportPath);
+            Console.WriteLine($"Detailed evaluation results exported to: {exportPath}");
+        }
+
+        // STEP 7: Helper method for per-horizon metrics calculation
+        static System.Collections.Generic.List<HorizonMetrics> CalculateHorizonMetrics(
+            System.Collections.Generic.List<RollingOriginResult> results, int horizon)
+        {
+            var metrics = new System.Collections.Generic.List<HorizonMetrics>();
+
+            for (int h = 0; h < horizon; h++)
+            {
+                var errors = new System.Collections.Generic.List<double>();
+                var mapeErrors = new System.Collections.Generic.List<double>();
+
+                foreach (var result in results)
+                {
+                    if (h < result.ActualValues.Length && h < result.ForecastedValues.Length)
+                    {
+                        float actual = result.ActualValues[h];
+                        float forecast = result.ForecastedValues[h];
+
+                        // Skip invalid values
+                        if (float.IsNaN(actual) || float.IsNaN(forecast) ||
+                            float.IsInfinity(actual) || float.IsInfinity(forecast))
+                            continue;
+
+                        double error = actual - forecast;
+                        errors.Add(error);
+
+                        // MAPE calculation (avoid division by zero)
+                        if (Math.Abs(actual) > 0.01)
+                        {
+                            mapeErrors.Add(Math.Abs(error / actual) * 100.0);
+                        }
+                    }
+                }
+
+                if (errors.Count > 0)
+                {
+                    double mae = errors.Average(e => Math.Abs(e));
+                    double rmse = Math.Sqrt(errors.Average(e => e * e));
+                    double mape = mapeErrors.Count > 0 ? mapeErrors.Average() : 0.0;
+
+                    metrics.Add(new HorizonMetrics
+                    {
+                        Horizon = h + 1,
+                        MAE = mae,
+                        RMSE = rmse,
+                        MAPE = mape,
+                        SampleCount = errors.Count
+                    });
                 }
             }
-            Console.WriteLine($"Evaluation details exported to: {exportPath}");
+
+            return metrics;
+        }
+
+        // STEP 8: Helper method for detailed CSV export
+        static void ExportDetailedResults(
+            System.Collections.Generic.List<RollingOriginResult> results,
+            System.Collections.Generic.List<HorizonMetrics> metrics,
+            string exportPath)
+        {
+            // Create directory if needed
+            Directory.CreateDirectory(Path.GetDirectoryName(exportPath)
+                                      ?? AppDomain.CurrentDomain.BaseDirectory);
+
+            using (var writer = new StreamWriter(exportPath, false))
+            {
+                // Write header with all horizons
+                writer.Write("OriginTimestamp");
+                for (int h = 1; h <= 24; h++)
+                {
+                    writer.Write($";Actual_H{h};Forecast_H{h};Error_H{h};LowerBound_H{h};UpperBound_H{h}");
+                }
+                writer.WriteLine();
+
+                // Write data rows
+                foreach (var result in results)
+                {
+                    writer.Write($"{result.OriginTimestamp:yyyy-MM-dd HH:mm:ss}");
+
+                    for (int h = 0; h < 24; h++)
+                    {
+                        if (h < result.ActualValues.Length)
+                        {
+                            float actual = result.ActualValues[h];
+                            float forecast = result.ForecastedValues[h];
+                            float error = actual - forecast;
+                            float lower = result.LowerBounds[h];
+                            float upper = result.UpperBounds[h];
+
+                            // Clamp negative bounds to 0
+                            if (lower < 0) lower = 0;
+
+                            writer.Write($";{actual:F3};{forecast:F3};{error:F3};{lower:F3};{upper:F3}");
+                        }
+                        else
+                        {
+                            writer.Write(";;;;;"); // Empty values if not available
+                        }
+                    }
+                    writer.WriteLine();
+                }
+
+                // Append summary statistics section
+                writer.WriteLine();
+                writer.WriteLine("=== Per-Horizon Summary Statistics ===");
+                writer.WriteLine("Horizon;MAE_MW;RMSE_MW;MAPE_Percent;SampleCount");
+                
+                foreach (var hm in metrics)
+                {
+                    writer.WriteLine($"{hm.Horizon};{hm.MAE:F3};{hm.RMSE:F3};{hm.MAPE:F2};{hm.SampleCount}");
+                }
+            }
         }
     }
 }
