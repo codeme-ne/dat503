@@ -754,6 +754,38 @@ namespace PowerDemandForecasting
             {
                 var originPoint = testRows[originIdx];
                 
+                // Validation output for first 3 origins
+                if (originIdx < 3)
+                {
+                    Console.WriteLine($"\n=== Forecast Origin Validation #{originIdx + 1} ===");
+                    Console.WriteLine($"Origin Timestamp: {originPoint.Timestamp:yyyy-MM-dd HH:mm}");
+                    
+                    // Show first and last forecast targets
+                    int firstIdx = originIdx + 1 + 0;  // H1 target
+                    int lastIdx = originIdx + 1 + 23;  // H24 target
+                    
+                    if (lastIdx < testRows.Count)
+                    {
+                        Console.WriteLine($"  H1  Target: {testRows[firstIdx].Timestamp:yyyy-MM-dd HH:mm}");
+                        Console.WriteLine($"  H24 Target: {testRows[lastIdx].Timestamp:yyyy-MM-dd HH:mm}");
+                        Console.WriteLine($"  Expected H1:  {originPoint.Timestamp.AddHours(1):yyyy-MM-dd HH:mm}");
+                        Console.WriteLine($"  Expected H24: {originPoint.Timestamp.AddHours(24):yyyy-MM-dd HH:mm}");
+                        
+                        // Validate alignment
+                        bool h1Correct = testRows[firstIdx].Timestamp == originPoint.Timestamp.AddHours(1);
+                        bool h24Correct = testRows[lastIdx].Timestamp == originPoint.Timestamp.AddHours(24);
+                        
+                        if (!h1Correct || !h24Correct)
+                        {
+                            Console.WriteLine("  ⚠️  WARNING: Timestamp alignment mismatch!");
+                        }
+                        else
+                        {
+                            Console.WriteLine("  ✅ Timestamp alignment verified");
+                        }
+                    }
+                }
+                
                 // Display progress every 100 origins
                 if (originIdx % 100 == 0)
                 {
