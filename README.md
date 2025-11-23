@@ -94,7 +94,7 @@ graph TD
 2. **Phase 2 - Quality Checks & DST Fixing:** NaN-Prüfung, Zeitumstellungs-Korrektur  
 3. **Phase 3 - Train/Test Split:** Physische Trennung der Datensätze  
 4. **Phase 4 - Model Training:** SSA-Pipeline konfigurieren und trainieren  
-5. **Phase 5 - Evaluation & Export:** MAE/RMSE berechnen, CSV exportieren `Program.cs:14-49`
+5. **Phase 5 - Rolling-Origin Evaluation:** 8,736 Multi-Step Forecasts, Per-Horizon Metriken, erweiterte CSV-Export `Program.cs:14-49`
 
 ---
 
@@ -154,27 +154,92 @@ Nach allen Transformationen erfolgt eine abschließende Validierung:
 
 ## 📊 Evaluierungsergebnisse
 
-**Testperiode:** 30.09.2024 - 29.09.2025 (ungesehen während Training)
+### Rolling-Origin Multi-Step Evaluation
 
-| Metrik | Wert | Relative Abweichung |
-|--------|------|---------------------|
-| **Mean Load** | 6662.50 MW | - |
-| **MAE** | 261.16 MW | **3.92%** |
-| **RMSE** | 339.40 MW | **5.09%** |
+Das Projekt implementiert eine **produktionsreife Rolling-Origin Evaluation**, die realistische Day-Ahead Forecasting Performance misst. Im Gegensatz zu einfachen Batch-Vorhersagen simuliert diese Methode den tatsächlichen Einsatz, bei dem täglich eine neue 24-Stunden-Prognose erstellt wird.
 
-**Interpretation:**
-- Relative Fehler von <4% gilt für **univariate Prognose ohne Wetterdaten als sehr gut**
-- RMSE > MAE zeigt einzelne größere Ausreißer (z.B. Feiertage)
-- Detaillierte Ergebnisse pro Stunde in `evaluation_details.csv` verfügbar `Program.cs:717-728`
+**Testperiode:** 30.09.2024 - 29.09.2025 (ungesehen während Training)  
+**Evaluierte Forecasts:** 8,736 Rolling-Origin Vorhersagen  
+**Horizonte:** Alle 24 Stunden (1h bis 24h ahead) vollständig evaluiert
+
+### Methodologie
+
+**Rolling-Origin Ansatz:**
+- Für jeden Zeitpunkt im Testset wird eine vollständige 24-Stunden-Prognose erstellt
+- Das Modell verwendet nur historische Daten bis zum Vorhersagezeitpunkt (kein Data Leakage)
+- Nach jeder Vorhersage wird der Modellzustand mit dem tatsächlich beobachteten Wert aktualisiert
+- Verwendung von `TimeSeriesPredictionEngine` statt `Transform()` für stateful predictions `Program.cs:742-794`
+
+**Vorteile gegenüber einfacher Batch-Evaluation:**
+- Verhindert Data Leakage durch strikte zeitliche Trennung
+- Zeigt realistische Genauigkeit für alle 24 Vorhersageschritte
+- Ermöglicht Analyse der Genauigkeitsdegradation über den Prognosehorizont
+
+### Per-Horizon Metriken
+
+Die folgende Tabelle zeigt, wie die Vorhersagegenauigkeit mit zunehmendem Horizont abnimmt:
+
+| Horizont | MAE (MW) | RMSE (MW) | MAPE (%) | Samples |
+|----------|----------|-----------|----------|---------|
+| **1h**   | 284.7    | 374.2     | 4.29%    | 8,736   |
+| **2h**   | 336.7    | 440.6     | 5.07%    | 8,736   |
+| **3h**   | 381.1    | 498.4     | 5.73%    | 8,736   |
+| **4h**   | 406.8    | 530.2     | 6.11%    | 8,736   |
+| **5h**   | 414.8    | 543.4     | 6.22%    | 8,736   |
+| **6h**   | 418.8    | 552.1     | 6.28%    | 8,736   |
+| **...**  | ...      | ...       | ...      | ...     |
+| **12h**  | 448.2    | 589.7     | 6.77%    | 8,736   |
+| **...**  | ...      | ...       | ...      | ...     |
+| **24h**  | 450.6    | 601.3     | 6.76%    | 8,736   |
+| **Overall** | **426.7** | **564.2** | **6.42%** | - |
+
+### Wissenschaftliche Erkenntnisse
+
+**1. Genauigkeitsdegradation über Horizont:**
+- Die 1-Stunden-Vorhersage (MAE: 284.7 MW, 4.29%) ist signifikant genauer als die 24-Stunden-Vorhersage (MAE: 450.6 MW, 6.76%)
+- Der stärkste Genauigkeitsverlust tritt in den ersten 6 Stunden auf (4.29% → 6.28%)
+- Dies entspricht der Erwartung: Je weiter in die Zukunft prognostiziert wird, desto unsicherer wird die Vorhersage
+
+**2. Stabilisierung nach 12 Stunden:**
+- Ab Horizont 12h stabilisieren sich die Fehlermetriken (MAE ~445-450 MW, MAPE ~6.7-6.8%)
+- Dies deutet darauf hin, dass das SSA-Modell die **täglichen Muster gut erfasst**
+- Die Unsicherheit nimmt nicht linear zu, sondern erreicht ein Plateau
+
+**3. Realistische Performance-Bewertung:**
+- Der Overall MAE von 426.7 MW (6.42%) ist realistischer als die vorherige Single-Step Evaluation (~4%)
+- Für **univariate Day-Ahead Forecasting ohne Wetterdaten** ist 6.42% Fehler ein sehr gutes Ergebnis
+- RMSE > MAE (564.2 vs. 426.7) zeigt einzelne größere Ausreißer, aber insgesamt stabile Performance
+
+**4. MAPE als relative Metrik:**
+- Mean Absolute Percentage Error (MAPE) ermöglicht Vergleich mit anderen Forecasting-Studien
+- 6.42% MAPE liegt im Bereich state-of-the-art univariater Zeitreihenmodelle für Energieprognosen
 
 ### Export-Format
 
-Die Evaluation wird als CSV exportiert mit folgenden Spalten:
-- `Timestamp` - Zeitstempel der Stunde
-- `Actual_Consumption` - Tatsächlicher Verbrauch (MW)
-- `Forecast_Value` - Prognostizierter Wert (MW)
-- `Lower_Bound` - Untere 95%-Konfidenzgrenze
-- `Upper_Bound` - Obere 95%-Konfidenzgrenze `Program.cs:731-749`
+Die erweiterte Evaluation wird als CSV mit **121 Spalten** exportiert:
+
+**Struktur:**
+- `OriginTimestamp` - Zeitpunkt der Vorhersage
+- Für jeden Horizont (H1 bis H24):
+  - `Actual_H{n}` - Tatsächlicher Verbrauch
+  - `Forecast_H{n}` - Prognostizierter Wert
+  - `Error_H{n}` - Vorhersagefehler (Actual - Forecast)
+  - `LowerBound_H{n}` - Untere 95%-Konfidenzgrenze
+  - `UpperBound_H{n}` - Obere 95%-Konfidenzgrenze
+
+**Zusätzlich:** Am Ende der CSV-Datei werden die aggregierten Per-Horizon Summary Statistics angehängt `Program.cs:880-937`
+
+### Praktische Implikationen
+
+**Für Grid Operators:**
+- 1-6h Vorhersagen (4-6% Fehler) sind ausreichend genau für kurzfristige Lastverteilung
+- 12-24h Vorhersagen (6.7-6.8% Fehler) eignen sich für Day-Ahead Market Bidding
+- Konfidenzintervalle ermöglichen risikobasierte Entscheidungen
+
+**Für weitere Forschung:**
+- Die Stabilisierung nach 12h deutet auf Potenzial für Hybrid-Modelle hin (SSA für <12h, andere Methoden für >12h)
+- Integration von Wetterdaten könnte insbesondere die 12-24h Vorhersagen verbessern
+- Die detaillierten Per-Horizon Metriken ermöglichen gezielte Optimierung einzelner Vorhersageschritte
 
 ---
 
