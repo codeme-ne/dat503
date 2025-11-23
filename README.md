@@ -299,4 +299,10 @@ Konsistente Dezimaltrennzeichen (Punkt) unabhängig von System-Locale:
 
 ---
 
+## 🔄 Workflow Status
+
+This repository uses automated CI/CD workflows for quality assurance.
+
+---
+
 **Entwickelt mit .NET 8 und ML.NET 5.0.0**
