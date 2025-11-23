@@ -1,169 +1,302 @@
-# ⚡ Power Demand Forecasting (Austria)
+# ⚡ Strombedarfsprognose Österreich (Power Demand Forecasting)
 
-Eine auf **.NET 8** und **ML.NET** basierende Konsolenanwendung zur stündlichen Vorhersage des österreichischen Stromverbrauchs unter Verwendung der **Singular Spectrum Analysis (SSA)**.
+Eine produktionsreife .NET 8 Konsolenanwendung zur stündlichen Vorhersage des österreichischen Stromverbrauchs mittels **Singular Spectrum Analysis (SSA)** und **ML.NET**. [0-cite-0](#0-cite-0) 
 
------
+---
 
 ## 📑 Inhaltsverzeichnis
 
-  - [Über das Projekt](https://www.google.com/search?q=%23-%C3%BCber-das-projekt)
-  - [Features & Methodik](https://www.google.com/search?q=%23-features--methodik)
-  - [Pipeline-Architektur](https://www.google.com/search?q=%23-pipeline-architektur)
-  - [Ergebnisse & Evaluation](https://www.google.com/search?q=%23-ergebnisse--evaluation)
-  - [Voraussetzungen & Installation](https://www.google.com/search?q=%23-voraussetzungen--installation)
-  - [Nutzung](https://www.google.com/search?q=%23-nutzung)
-  - [Projektstruktur](https://www.google.com/search?q=%23-projektstruktur)
-  - [Referenzen](https://www.google.com/search?q=%23-referenzen)
+- [Projektübersicht](#projektübersicht)
+- [Technische Highlights](#technische-highlights)
+- [Architektur & Pipeline](#architektur--pipeline)
+- [Datenqualität & Preprocessing](#datenqualität--preprocessing)
+- [ML-Modell: SSA-Konfiguration](#ml-modell-ssa-konfiguration)
+- [Evaluierungsergebnisse](#evaluierungsergebnisse)
+- [Installation & Ausführung](#installation--ausführung)
+- [Projektstruktur](#projektstruktur)
+- [Technische Entscheidungen](#technische-entscheidungen)
+- [Referenzen](#referenzen)
 
------
+---
 
-## 📖 Über das Projekt
+## 📖 Projektübersicht
 
-Ziel dieses Projekts ist es, den stündlichen Stromverbrauch (Last) in Österreich für einen zukünftigen Horizont von 24 Stunden vorherzusagen. Die Daten stammen von der [E-Control](https://www.e-control.at/statistik/e-statistik/data).
+Dieses Projekt prognostiziert den **stündlichen Stromverbrauch in Österreich** für einen 24-Stunden-Horizont unter Verwendung historischer Lastdaten von der [E-Control](https://www.e-control.at/statistik/e-statistik/data).
 
-Besonderes Augenmerk liegt auf der **Datenqualität** und dem Umgang mit realen Problemen von Zeitreihen, wie der Sommer-/Winterzeitumstellung (DST), fehlenden Werten und Concept Drift. Als Algorithmus wird SSA verwendet, da dieser univariate Zeitreihen effektiv in Trend-, Saison- und Rauschkomponenten zerlegen kann, ohne auf externe Wetterdaten angewiesen zu sein.
+**Kernziele:**
+- Robuste Behandlung realer Zeitreihenprobleme (Zeitumstellung, fehlende Werte, Concept Drift)
+- Univariate Prognose ohne externe Wetterdaten
+- Reproduzierbare, automatisierte Pipeline
+- Produktionsreife Datenqualitätsprüfungen [0-cite-1](#0-cite-1) 
 
------
+---
 
-## ✨ Features & Methodik
+## ✨ Technische Highlights
 
-### 🧠 Algorithmus: Singular Spectrum Analysis (SSA)
+### 🧠 Machine Learning: Singular Spectrum Analysis (SSA)
 
-Das Modell nutzt die Zeitreihen-Dekomposition von Microsoft.ML.TimeSeries.
+SSA zerlegt Zeitreihen in **Trend-, Saison- und Rauschkomponenten** durch Trajektorienmatrix-Dekomposition.
 
-  - **Window Size:** `168` Stunden (bildet den wöchentlichen Zyklus ab).
-  - **Series Length:** `720` Stunden (bildet den monatlichen Kontext ab).
-  - **Train Size:** \~1 Jahr (dynamisch berechnet, um Concept Drift zu minimieren).
-  - **Confidence:** 95% (berechnet untere und obere Prognoseschranken).
+**Konfigurierte Parameter:**
+- **Window Size:** 168 Stunden (7 Tage) - bildet wöchentliche Muster ab
+- **Series Length:** 720 Stunden (30 Tage) - lokaler Monatskontext
+- **Train Size:** Dynamisch berechnet (~8784 Stunden für Schaltjahr 2023-2024)
+- **Forecast Horizon:** 24 Stunden
+- **Confidence Level:** 95% (mit Lower/Upper Bounds) [0-cite-2](#0-cite-2) 
 
-### 🛠️ Robustes Data Engineering
+### 🛠️ Fortgeschrittenes Data Engineering
 
-Das Projekt implementiert eine fortgeschrittene Logik zur Behandlung von Zeitumstellungen (DST):
+#### 1. DST-Korrektur (Zeitumstellung)
+Das Projekt implementiert eine spezialisierte Logik zur Behandlung von Sommer-/Winterzeitumstellungen:
 
-  * **Oktober-Duplikate (Uhren zurück):** Erkennt doppelte Zeitstempel (z.B. 02:00A und 02:00B) und berechnet den Mittelwert, um die Monotonie der Zeitreihe zu wahren.
-  * **März-Lücken (Uhren vor) & Ausfälle:** Erkennt fehlende Stunden und füllt diese mittels **linearer Interpolation** basierend auf den Nachbarwerten auf.
+**Oktober (Uhren zurück):**
+- Erkennt doppelte Zeitstempel (z.B. 02:00:00 erscheint zweimal)
+- Berechnet Mittelwert beider Werte zur Wahrung der Monotonie
+- Verhindert Duplikate in der Zeitreihe [0-cite-3](#0-cite-3) 
 
-### 📅 Concept Drift Prevention
+**März (Uhren vor):**
+- Erkennt fehlende Stunden (02:00:00 - 02:59:59 existiert nicht)
+- Füllt Lücken mittels linearer Interpolation basierend auf Nachbarstunden
+- Garantiert lückenlose stündliche Sequenz [0-cite-4](#0-cite-4) 
 
-Um veraltete Verbrauchsmuster (z.B. vor dem Anstieg von E-Mobilität und Wärmepumpen) auszuschließen, wird ein strikter **temporaler Split** angewendet:
+#### 2. Concept Drift Prevention
+Strikte **temporale Split-Strategie** zur Vermeidung veralteter Muster:
+- **Training:** 30.09.2023 – 29.09.2024 (nur letztes Jahr)
+- **Testing:** 30.09.2024 – 29.09.2025
+- Alte Daten vor 2023 werden bewusst ignoriert (E-Mobilität, Wärmepumpen-Effekte) [0-cite-5](#0-cite-5) 
 
-  * **Training:** 30.09.2023 – 30.09.2024
-  * **Testing:** 30.09.2024 – 30.09.2025
+#### 3. Robustes Daten-Cleaning
+- Automatisches Überspringen von 14 Metadaten-Zeilen in Rohdatei
+- Konvertierung von Komma → Punkt als Dezimaltrennzeichen
+- Validierung aller Zeitstempel und Konsumwerte
+- Logging von übersprungenen/invaliden Zeilen für Transparenz [0-cite-6](#0-cite-6) 
 
------
+---
 
-## ⚙️ Pipeline-Architektur
+## ⚙️ Architektur & Pipeline
 
-Der Prozess läuft vollautomatisch in `Program.cs` ab:
+Die vollautomatische Pipeline besteht aus 5 Phasen:
 
 ```mermaid
-graph TD;
-    Raw["Raw CSV (E-Control)"] -->|CleanData| Clean["Clean CSV (Format Fix)"];
-    Clean -->|HandleDst| DST["DST Fixed CSV (No Gaps/Dups)"];
-    DST -->|Split| Train["Train Data (2023-24)"];
-    DST -->|Split| Test["Test Data (2024-25)"];
-    Train -->|TrainModel| Model["SSA Model (.zip)"];
-    Test -->|Evaluate| Metrics["MAE / RMSE"];
-    Model -->|Transform| Export["Evaluation Details (.csv)"];
+graph TD
+    A["Rohdaten: el_dataset_h.csv"] -->|Phase 1: CleanData| B["el_power_clean.csv"]
+    B -->|Phase 2: DST Fix| C["el_power_clean_dstfixed.csv"]
+    C -->|Phase 3: Split| D["train_data.csv (2023-2024)"]
+    C -->|Phase 3: Split| E["test_data.csv (2024-2025)"]
+    D -->|Phase 4: TrainModel| F["forecast_model.zip"]
+    E -->|Phase 5: Evaluate| G["evaluation_details.csv"]
+    F -->|Phase 5: Transform| G
 ```
 
-1.  **CleanData:** Parsing der Rohdaten, Entfernung von Metadaten, Normalisierung von Dezimaltrennzeichen (Komma → Punkt).
-2.  **QualityChecks:** Prüfung auf NaN, negative Werte und Zeitstempel-Integrität.
-3.  **HandleDstDuplicatesAndGaps:** Korrektur von Zeitumstellungs-Anomalien.
-4.  **CreateTrainTestFiles:** Physische Trennung der Daten.
-5.  **TrainModel:** Training des SSA-Modells.
-6.  **EvaluateAndExport:** Berechnung der Metriken und Export der Prognosewerte vs. Ist-Werte.
+**Phasen im Detail:**
 
------
+1. **Phase 1 - Data Cleaning:** Parsing, Dezimalkonvertierung, Spaltenextraktion
+2. **Phase 2 - Quality Checks & DST Fixing:** NaN-Prüfung, Zeitumstellungs-Korrektur
+3. **Phase 3 - Train/Test Split:** Physische Trennung der Datensätze
+4. **Phase 4 - Model Training:** SSA-Pipeline konfigurieren und trainieren
+5. **Phase 5 - Evaluation & Export:** MAE/RMSE berechnen, CSV exportieren [0-cite-7](#0-cite-7) 
 
-## 📊 Ergebnisse & Evaluation
+---
 
-Das Modell wurde auf einem ungesehenen Testzeitraum (Sept 2024 - Sept 2025) evaluiert.
+## 🔍 Datenqualität & Preprocessing
 
-| Metrik | Wert | Bedeutung |
-| :--- | :--- | :--- |
-| **Mean Load** | `6662.50 MW` | Durchschnittliche Last im Testzeitraum |
-| **MAE** | `261.16 MW` | Mittlerer absoluter Fehler (\~3.92%) |
-| **RMSE** | `339.40 MW` | Wurzel des mittleren quadratischen Fehlers |
+### Implementierte Quality Checks
 
-Die Ergebnisse zeigen eine relative Abweichung von **unter 4%**, was für eine univariate Prognose ohne Wetterdaten als robust gilt. Detaillierte Ergebnisse pro Stunde finden sich nach dem Ausführen in `Data/evaluation_details.csv`.
+Die Anwendung führt umfassende Validierungen durch:
 
------
+**Zeitstempel-Integrität:**
+- Monotonie-Prüfung
+- Duplikat-Erkennung mit Wertanzeige
+- Lücken-Detektion (fehlende Stunden)
 
-## 💻 Voraussetzungen & Installation
+**Wert-Integrität:**
+- NaN/Infinity-Erkennung
+- Negative Werte (physikalisch unmöglich)
+- Statistiken: Min, Max, Mean, StdDev
+
+**Concept Drift Awareness:**
+- Anzeige der Datenverteilung vor/während/nach Trainingszeitraum
+- Warnungen bei zu kleinen Datensätzen [0-cite-8](#0-cite-8) 
+
+### Finale Integritätsprüfung
+
+Nach allen Transformationen erfolgt eine abschließende Validierung:
+- Prüfung auf verbleibende Lücken (>1.01h Differenz)
+- Prüfung auf Duplikate (<0.99h Differenz)
+- Success/Failure Report [0-cite-9](#0-cite-9) 
+
+---
+
+## 🤖 ML-Modell: SSA-Konfiguration
+
+### Parameter-Begründung
+
+**Window Size = 168h (1 Woche):**
+- Erfasst dominante wöchentliche Muster (Montag vs. Sonntag)
+- Muss < Series Length sein
+
+**Series Length = 720h (~1 Monat):**
+- Bietet ausreichend Kontext für Saison-Dekomposition
+- Typischerweise 1.5-3× Window Size (hier 4.3×)
+
+**Train Size = 8784h (Schaltjahr):**
+- Dynamisch berechnet basierend auf tatsächlicher Trainingsdata
+- Erfasst kompletten Jahreszyklus (Sommer/Winter)
+- Muss ≥ Series Length und ≤ Trainingsdata-Count sein [0-cite-10](#0-cite-10) 
+
+### Datenmodelle
+
+**ModelInput:** Zeitstempel + Stromverbrauch (MW) [0-cite-11](#0-cite-11) 
+
+**ModelOutput:** Forecast-Array + Konfidenzintervalle [0-cite-12](#0-cite-12) 
+
+---
+
+## 📊 Evaluierungsergebnisse
+
+**Testperiode:** 30.09.2024 - 29.09.2025 (ungesehen während Training)
+
+| Metrik | Wert | Relative Abweichung |
+|--------|------|---------------------|
+| **Mean Load** | 6662.50 MW | - |
+| **MAE** | 261.16 MW | **3.92%** |
+| **RMSE** | 339.40 MW | **5.09%** |
+
+**Interpretation:**
+- Relative Fehler von <4% gilt für **univariate Prognose ohne Wetterdaten als sehr gut**
+- RMSE > MAE zeigt einzelne größere Ausreißer (z.B. Feiertage)
+- Detaillierte Ergebnisse pro Stunde in `evaluation_details.csv` verfügbar [0-cite-13](#0-cite-13) 
+
+### Export-Format
+
+Die Evaluation wird als CSV exportiert mit folgenden Spalten:
+- `Timestamp` - Zeitstempel der Stunde
+- `Actual_Consumption` - Tatsächlicher Verbrauch (MW)
+- `Forecast_Value` - Prognostizierter Wert (MW)
+- `Lower_Bound` - Untere 95%-Konfidenzgrenze
+- `Upper_Bound` - Obere 95%-Konfidenzgrenze [0-cite-14](#0-cite-14) 
+
+---
+
+## 💻 Installation & Ausführung
 
 ### Voraussetzungen
 
-  - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) installiert.
-  - Git.
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) oder höher
+- Git
+- Rohdaten: `Data/el_dataset_h.csv` (von E-Control)
 
 ### Installation
 
-1.  Repository klonen:
-
-    ```bash
-    git clone https://github.com/dein-user/dat503-power-forecasting.git
-    cd dat503-power-forecasting
-    ```
-
-2.  Abhängigkeiten wiederherstellen:
-
-    ```bash
-    dotnet restore PowerDemandForecasting/PowerDemandForecasting.csproj
-    ```
-
------
-
-## 🚀 Nutzung
-
-Das Projekt ist als Konsolenanwendung konzipiert, die die gesamte Pipeline sequenziell durchläuft.
-
-### Build
-
 ```bash
-dotnet build PowerDemandForecasting/PowerDemandForecasting.csproj
+# Repository klonen
+git clone https://github.com/codeme-ne/dat503.git
+cd dat503/PowerDemandForecasting
+
+# Abhängigkeiten wiederherstellen (falls .csproj vorhanden)
+dotnet restore
+
+# Build
+dotnet build
+
+# Ausführen
+dotnet run
 ```
 
-### Ausführen
+### Erwartete Output-Dateien
 
-```bash
-dotnet run --project PowerDemandForecasting/PowerDemandForecasting.csproj
-```
+Nach erfolgreicher Ausführung werden folgende Dateien im `Data/`-Ordner generiert:
+- `el_power_clean.csv` - Bereinigte Rohdaten
+- `el_power_clean_dstfixed.csv` - DST-korrigierte, lückenlose Zeitreihe
+- `train_data.csv` - Trainingsdaten (2023-2024)
+- `test_data.csv` - Testdaten (2024-2025)
+- `evaluation_details.csv` - Detaillierte Evaluation (Excel/PowerBI ready)
 
-### Output
+Im `Models/`-Ordner:
+- `forecast_model.zip` - Trainiertes ML.NET-Modell
 
-Nach erfolgreicher Ausführung findest du im Ordner `PowerDemandForecasting/Data/`:
-
-  - `el_power_clean_dstfixed.csv`: Die bereinigte, lückenlose Zeitreihe.
-  - `evaluation_details.csv`: CSV mit Spalten `Timestamp`, `Actual`, `Forecast`, `LowerBound`, `UpperBound` (ideal für Analysen in Excel/PowerBI).
-  - `train_data.csv` / `test_data.csv`: Die verwendeten Datensätze.
-
-Das trainierte Modell wird unter `PowerDemandForecasting/Models/forecast_model.zip` gespeichert.
-
------
+---
 
 ## 📂 Projektstruktur
 
-```text
-PowerDemandForecasting/
-├── Data/                           # Input- & Output-Daten
-│   ├── el_dataset_h.csv            # Rohdaten (Input)
-│   ├── el_power_clean.csv          # Zwischenschritt (Format bereinigt)
-│   └── evaluation_details.csv      # Endergebnis (Forecast vs Actual)
-├── Models/                         # C# Klassen & Modell-Artefakte
-│   ├── ModelInput.cs               # Daten-Schema
-│   ├── ModelOutput.cs              # Prognose-Schema
-│   └── forecast_model.zip          # Trainiertes ML.NET Modell
-├── Program.cs                      # Hauptlogik (Pipeline)
-├── PowerDemandForecasting.csproj   # Projektkonfiguration
-├── AGENTS.md                       # Richtlinien für AI-Assistenten
-└── README.md                       # Projektdokumentation
+```
+dat503/
+├── PowerDemandForecasting/          # Hauptprojekt
+│   ├── Data/                        # Datenverzeichnis
+│   │   ├── el_dataset_h.csv         # Rohdaten (Input)
+│   │   ├── el_power_clean.csv       # Phase 1 Output
+│   │   ├── el_power_clean_dstfixed.csv # Phase 2 Output
+│   │   ├── train_data.csv           # Phase 3 Output
+│   │   ├── test_data.csv            # Phase 3 Output
+│   │   └── evaluation_details.csv   # Phase 5 Output
+│   ├── Models/                      # C# Klassen & ML-Modell
+│   │   ├── ModelInput.cs            # Input-Schema
+│   │   ├── ModelOutput.cs           # Output-Schema
+│   │   └── forecast_model.zip       # Trainiertes Modell
+│   └── Program.cs                   # Hauptlogik (753 Zeilen)
+├── References/                      # Referenzmaterial
+│   └── Bike_Example_Github_Repo.txt # ML.NET Tutorial-Basis
+├── README.md                        # Diese Datei
+├── PLAN.md                          # Detaillierter Entwicklungsplan
+├── AGENTS.md                        # AI-Assistenten Richtlinien
+└── CLAUDE.md                        # Weitere Dokumentation
 ```
 
------
+---
+
+## 🔧 Technische Entscheidungen
+
+### Warum SSA statt LSTM/Prophet?
+
+**Vorteile von SSA für diesen Use Case:**
+- Keine externen Features erforderlich (univariat)
+- Robuste Dekomposition von Trend/Saison/Rauschen
+- Deterministisch und reproduzierbar
+- Geringe Trainingsdauer (<1 Minute)
+- Native ML.NET-Integration
+
+### Warum strikte temporale Splits?
+
+**Concept Drift in Energiedaten:**
+- E-Mobilität-Adoption seit 2020
+- Wärmepumpen-Boom seit 2022
+- COVID-19 Homeoffice-Effekte 2020-2021
+
+➜ Training nur auf 2023-2024 vermeidet veraltete Muster [0-cite-15](#0-cite-15) 
+
+### Warum InvariantCulture überall?
+
+Konsistente Dezimaltrennzeichen (Punkt) unabhängig von System-Locale:
+- Verhindert Parsing-Fehler bei Komma-Kulturen (de-DE, de-AT)
+- Ermöglicht plattformunabhängige Ausführung
+- Standard für ML.NET TextLoader [0-cite-16](#0-cite-16) 
+
+---
 
 ## 📚 Referenzen
 
-  * [Microsoft ML.NET Time Series Forecasting Tutorial](https://learn.microsoft.com/en-us/dotnet/machine-learning/tutorials/time-series-demand-forecasting)
-  * [Singular Spectrum Analysis (SSA) - Wikipedia](https://en.wikipedia.org/wiki/Singular_spectrum_analysis)
-  * [E-Control Austria (Datenquelle)](https://www.e-control.at/)
+### ML.NET Dokumentation
+- [Time Series Forecasting Tutorial](https://learn.microsoft.com/en-us/dotnet/machine-learning/tutorials/time-series-demand-forecasting)
+- [ForecastBySsa API Reference](https://learn.microsoft.com/en-us/dotnet/api/microsoft.ml.timeseriescatalog.forecastbyssa)
+
+### Wissenschaftliche Grundlagen
+- [Singular Spectrum Analysis - Wikipedia](https://en.wikipedia.org/wiki/Singular_spectrum_analysis)
+- Bike Sharing Demand Tutorial (Microsoft ML.NET Samples)
+
+### Datenquelle
+- [E-Control Statistik](https://www.e-control.at/statistik/e-statistik/data)
+
+---
+
+## 📝 Notes
+
+**Wichtige Hinweise für Weiterentwicklung:**
+
+1. **Parametertuning:** Window Size und Series Length können für bessere Seasonal Patterns angepasst werden
+2. **Multivariate Erweiterung:** Integration von Wetterdaten (Temperatur) über `ForecastBySsa` möglich
+3. **Online Learning:** Modell kann mit `TimeSeriesPredictionEngine.Update()` inkrementell aktualisiert werden
+4. **Produktionisierung:** Modell-Checkpoint kann in REST-API oder Azure Functions eingebunden werden [0-cite-17](#0-cite-17) 
+
+---
+
+**Entwickelt mit .NET 8 und ML.NET 5.0.0**
